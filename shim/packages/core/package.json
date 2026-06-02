@@ -1,0 +1,27 @@
+{
+  "name": "@sui-shim/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./keystore": "./src/keystore/index.ts",
+    "./package": "./src/package/index.ts",
+    "./errors": "./src/errors.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten/bcs": "^2.0.5",
+    "@mysten/sui": "^2.17.0",
+    "smol-toml": "^1.6.1",
+    "zod": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.2"
+  }
+}

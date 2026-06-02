@@ -1,0 +1,8 @@
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: packages/server/src/rpc/gen
+    opt: target=ts
+  - local: protoc-gen-connect-es
+    out: packages/server/src/rpc/gen
+    opt: target=ts

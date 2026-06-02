@@ -1,0 +1,15 @@
+# Buf workspace configuration.
+# Proto files vendored from rohrerj/scion branch hummingbird-api-experiment.
+# Source commit: 481d78a51c5cead6aff961b3913f8c0ddf10dac6
+# To update: copy updated .proto files from the source branch and re-run buf generate.
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX  # vendored files use proto.hummingbird.v1, not v1 suffix-only
+breaking:
+  use:
+    - FILE

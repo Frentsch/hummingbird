@@ -1,0 +1,22 @@
+[network]
+name = "testnet"
+
+[keystore]
+path = "\\\\wsl.localhost\\Ubuntu\\home\\frentsch\\.sui\\sui_config\\sui.keystore"
+
+[http]
+port = 8080
+token = "some-bearer-token"
+
+[grpc]
+port = 9090
+
+[package]
+id = "0xd672ffc5aee8fb7bd20fc77d12163cc03a8ddfb45738801285ccef655c591572"
+globalRegistryId = "0x8a3c4ee1d34fe507425dc4c7864cf1eb37a6746ea30ccd2d20262235ae118254"
+
+[as]
+asRegistryId = "0x46334708b9c838cd0f2e149cba214cad098fa2499579121d4c4a1ecddfb158bc"
+asAuthCapId = "0x6c1266332165d33a6363b228e1bdaf345df217c8ede1437acc502efc59e71e6a"
+sellerAuthTokenId = "0x0f82fd990b4e3b18b46a9a271fa6c1ea075c241cebaabd33dc278a998b2cfbff"
+interfaces = [ "0x62135c68a997b753e882bf752224282f7451f37031cb98aea64aa27086695051" ]

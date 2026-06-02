@@ -1,0 +1,21 @@
+{
+  "name": "sui-shim",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "proto:gen": "buf generate",
+    "cli": "node packages/cli/bin/sui-shim.js"
+  },
+  "devDependencies": {
+    "@sui-shim/cli": "workspace:*",
+    "@bufbuild/buf": "^1.70.0",
+    "@bufbuild/protoc-gen-es": "^1.10.1",
+    "@connectrpc/protoc-gen-connect-es": "^1.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.2"
+  }
+}

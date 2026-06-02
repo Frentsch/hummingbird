@@ -1,0 +1,6 @@
+packages:
+  - "packages/*"
+allowBuilds:
+  '@bufbuild/buf': true
+  esbuild: true
+  protobufjs: true
