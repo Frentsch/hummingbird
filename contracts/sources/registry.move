@@ -2,7 +2,7 @@ module hummingbird::registry {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::table::{Self, Table};
+    use sui::bag::{Self, Bag};
     use sui::event;
     use sui::derived_object;
     use sui::object_bag::{Self, ObjectBag};
@@ -14,7 +14,7 @@ module hummingbird::registry {
     /// Root shared object. Single instance, ID known at deploy time.
     struct GlobalRegistry has key {
         id: UID,
-        as_registries: Table<u64, ID>,  // isd_as_id -> AsRegistry object ID
+        as_registries: Bag,  // isd_as_id (u64) -> AsRegistry object ID
     }
 
     /// Per-AS shared object. ID recorded in GlobalRegistry.
@@ -22,7 +22,7 @@ module hummingbird::registry {
         id: UID,
         isd_as_id: u64,
         authority: address,
-        interfaces: Table<u16, ID>,  // Interface id -> Interface object ID
+        interfaces: Bag,  // interface_id (u16) -> Interface object ID
     }
 
     // Interface holding its listings. Uniquely identified by isd_as_id & interface_id
@@ -56,7 +56,7 @@ module hummingbird::registry {
     fun init(ctx: &mut TxContext) {
         transfer::share_object(GlobalRegistry {
             id: object::new(ctx),
-            as_registries: table::new(ctx),
+            as_registries: bag::new(ctx),
         });
     }
 
@@ -68,15 +68,15 @@ module hummingbird::registry {
         isd_as_id: u64,
         ctx: &mut TxContext,
     ): AsAuthCap {
-        assert!(!table::contains(&global.as_registries, isd_as_id), EAsAlreadyRegistered);
+        assert!(!bag::contains(&global.as_registries, isd_as_id), EAsAlreadyRegistered);
         let registry = AsRegistry {
             id: derived_object::claim(&mut global.id, isd_as_id),
             isd_as_id,
             authority: tx_context::sender(ctx),
-            interfaces: table::new(ctx),
+            interfaces: bag::new(ctx),
         };
         let registry_id = object::id(&registry);
-        table::add(&mut global.as_registries, isd_as_id, registry_id);
+        bag::add(&mut global.as_registries, isd_as_id, registry_id);
         event::emit(AsRegistered { isd_as_id, registry_id });
         transfer::share_object(registry);
         AsAuthCap { id: object::new(ctx), isd_as_id }
@@ -101,7 +101,7 @@ module hummingbird::registry {
         ctx: &mut TxContext,
     ) {
         assert!(cap.isd_as_id == as_registry.isd_as_id, EUnauthorized);
-        assert!(!table::contains(&as_registry.interfaces, interface_id), EInterfaceAlreadyExists);
+        assert!(!bag::contains(&as_registry.interfaces, interface_id), EInterfaceAlreadyExists);
         let interface = Interface {
             id: derived_object::claim(&mut as_registry.id, interface_id),
             isd_as_id: as_registry.isd_as_id,
@@ -109,7 +109,7 @@ module hummingbird::registry {
             listings: object_bag::new(ctx)
         };
         let interface_object_id = object::id(&interface);
-        table::add(&mut as_registry.interfaces, interface_id, interface_object_id);
+        bag::add(&mut as_registry.interfaces, interface_id, interface_object_id);
         event::emit(InterfaceRegistered {
             isd_as_id: as_registry.isd_as_id,
             interface_object_id,
@@ -122,14 +122,14 @@ module hummingbird::registry {
     // --- Lookup helpers (read-only, used by clients and other modules) ---
 
     public fun get_as_registry_id(global: &GlobalRegistry, isd_as_id: u64): ID {
-        *table::borrow(&global.as_registries, isd_as_id)
+        *bag::borrow<u64, ID>(&global.as_registries, isd_as_id)
     }
 
     public fun get_interface_id(
         as_registry: &AsRegistry,
         interface_id: u16,
     ): ID {
-        *table::borrow(&as_registry.interfaces,interface_id)
+        *bag::borrow<u16, ID>(&as_registry.interfaces, interface_id)
     }
 
     public fun cap_isd_as_id(cap: &AsAuthCap): u64 { cap.isd_as_id }
