@@ -13,7 +13,8 @@ import {
   PlaintextUnlocker,
   extractCreatedObjectId,
   getObjectType,
-  saveConfig
+  saveConfig,
+  listingInterfaceId
 } from '@sui-shim/core';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
@@ -141,7 +142,7 @@ export function makeCallCommand(): Command {
       configOpt(
         new Command('create-listing')
           .description('Create a new asset listing on an Interface')
-          .requiredOption('--interface-object-id <id>', 'Interface object ID')
+          .option('--interface-object-id <id>', 'Interface object ID')
           .requiredOption('--interface-type <n>', 'Interface Type (0=Ingress, 1=Egress)', parseInt)
           .option('--as-auth-cap-id <id>', 'AsAuthCap object ID (fallback: as.asAuthCapId in config)')
           .option('--seller-auth-token-id <id>', 'SellerAuthToken object ID (fallback: as.sellerAuthTokenId in config)')
@@ -174,7 +175,7 @@ export function makeCallCommand(): Command {
           ctx,
           buildCreateListing({
             packageId: ctx.config.package.id,
-            interfaceObjectId: opts.interfaceObjectId,
+            interfaceObjectId: resolve(opts.interfaceObjectId, ctx.config.as?.interfaces[0], 'interface-object-id'),
             interfaceType: opts.interfaceType,
             asAuthCapId,
             sellerAuthTokenId,
@@ -198,7 +199,6 @@ export function makeCallCommand(): Command {
       configOpt(
         new Command('buy-and-take')
           .description('Buy a listing slice and transfer the resulting asset to the signer')
-          .requiredOption('--interface-object-id <id>', 'Interface object ID')
           .requiredOption('--listing-id <id>', 'Listing ID (ObjectBag key)')
           .requiredOption('--start-time <s>', 'Desired start time (u64)', parseInt)
           .requiredOption('--exp-time <s>', 'Desired expiry time (u64)', parseInt)
@@ -219,16 +219,18 @@ export function makeCallCommand(): Command {
         coinType: string;
       }) => {
         const ctx = await makeCtx(opts.config);
+        const listing = await ctx.client.getObject({ id: opts.listingId, options: { showContent: true } });
+        const interfaceObjectId = listingInterfaceId(listing);
+        
         const result = await runTx(
           ctx,
           buildBuyAndTake({
             packageId: ctx.config.package.id,
-            interfaceObjectId: opts.interfaceObjectId,
+            interfaceObjectId: interfaceObjectId,
             listingId: opts.listingId,
             startTime: BigInt(opts.startTime),
             expTime: BigInt(opts.expTime),
             bandwidth: BigInt(opts.bandwidth),
-            paymentCoinId: opts.paymentCoinId,
             maxPrice: BigInt(opts.maxPrice),
             coinType: opts.coinType,
           }),
@@ -393,8 +395,8 @@ export function makeCallCommand(): Command {
   //owned-listings
   call.addCommand(
     configOpt(
-      new Command('owned-listings')
-        .description('List all owned listings'),
+      new Command('owned-assets')
+        .description('List all owned assets'),
     ).action(async (opts: { config: string; }) => {
       const ctx = await makeCtx(opts.config);
 

@@ -1,5 +1,5 @@
 import { Transaction } from '@mysten/sui/transactions';
-import { moveTarget } from './manifest.js';
+import { DEFAULT_COIN_TYPE, moveTarget } from './manifest.js';
 
 export interface BuyAndTakeParams {
   packageId: string;
@@ -17,13 +17,6 @@ export interface BuyAndTakeParams {
   /** Desired bandwidth in kbps (u64). */
   bandwidth: bigint;
   maxPrice: bigint;
-  /**
-   * Object ID of the Coin<COIN> owned object used for payment.
-   * When undefined the gas coin (tx.gas) is used — necessary when the user
-   * holds only a single SUI coin, since using it as an explicit object input
-   * would leave no coin available for gas.
-   */
-  paymentCoinId?: string;
   /** Coin type, e.g. "0x2::sui::SUI". */
   coinType: string;
 }
@@ -36,7 +29,7 @@ export function buildBuyAndTake(params: BuyAndTakeParams): Transaction {
   const tx = new Transaction();
   tx.moveCall({
     target: moveTarget(params.packageId, 'buyAndTake'),
-    typeArguments: [params.coinType],
+    typeArguments: [params.coinType??DEFAULT_COIN_TYPE],
     arguments: [
       tx.object(params.interfaceObjectId),
       // listingId is an ObjectBag key, not an object input — pass as pure ID.
@@ -44,7 +37,7 @@ export function buildBuyAndTake(params: BuyAndTakeParams): Transaction {
       tx.pure.u64(params.startTime),
       tx.pure.u64(params.expTime),
       tx.pure.u64(params.bandwidth),
-      params.paymentCoinId ? tx.object(params.paymentCoinId) : tx.splitCoins(tx.gas,[tx.pure.u64(params.maxPrice)]),
+      tx.splitCoins(tx.gas,[tx.pure.u64(params.maxPrice)]),
     ],
   });
   return tx;

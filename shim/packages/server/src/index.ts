@@ -63,13 +63,20 @@ export async function startServer(configPath: string): Promise<void> {
   });
 
   const rpcHandler = connectNodeAdapter({
-    routes: createRpcRoutes(state),
+    routes: (router) => {
+      createRpcRoutes(state)(router);
+      for (const handler of router.handlers) {
+        console.log(`[debug] registered route: ${handler.requestPath}`);
+      }
+    },
     acceptCompression: [compressionGzip],
     interceptors: [authInterceptor],
   });
+  
   const rpcServer = createServer(rpcHandler);
+  
   rpcServer.listen(config.grpc.port, () => {
-    console.log(`[gRPC/Connect] listening on port ${config.grpc.port}`);
+    console.log(`[debug] [gRPC/Connect] listening on ${rpcServer.address()?.toString()}`);
   });
 
   const shutdown = () => {

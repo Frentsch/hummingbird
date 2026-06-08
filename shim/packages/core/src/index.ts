@@ -10,3 +10,4 @@ export type { RedeemEvent, RedeemEventHandler } from './event-listener.js';
 export { ConfigSchema, loadConfig, saveConfig } from './config.js';
 export type { Config } from './config.js';
 export * from './helpers.js';
+export * from './helpers/registry.js';

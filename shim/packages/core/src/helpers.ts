@@ -17,3 +17,15 @@ export function extractCreatedObjectId(result: TxResult, objectType: string): st
 export function getObjectType(packageId: string, module: string, type: string) : string{
     return packageId.concat("::", module,"::", type);
 }
+
+/** Extract the Interface object ID stored in an AssetListing's `interface` field. */
+export function listingInterfaceId(obj: any): string {
+    const fields = (obj.data!.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
+    console.log(fields);
+    return fields['interface'] as string;
+}
+
+export function getObjectFields(obj:any): Record<string, unknown> {
+    return (obj.data!.content as {dataType: 'moveObject'; fields: Record<string, unknown>}).fields;
+}
+
