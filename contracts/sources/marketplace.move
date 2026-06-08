@@ -28,6 +28,7 @@ module hummingbird::marketplace {
     /// Listing wrapping a HummingbirdAsset inside the interfaces's ObjectBag.
     struct AssetListing<phantom COIN> has key, store {
         id: UID,
+        interface: ID,
         asset: HummingbirdAsset,
         price: u64,
         time_granularity: u64,
@@ -235,7 +236,7 @@ module hummingbird::marketplace {
         seller_token: &SellerAuthToken,
     ): HummingbirdAsset {
         let AssetListing<COIN> {
-            id, asset, price: _, time_granularity: _, min_bandwidth: _, seller,
+            id, interface: _, asset, price: _, time_granularity: _, min_bandwidth: _, seller,
         } = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
         assert!(seller.token_id == object::id(seller_token), ENotSeller);
         object::delete(id);
@@ -278,6 +279,7 @@ module hummingbird::marketplace {
         listing.price   = proportional_price(listing.price, old_exp - old_start, split_time - old_start);
         AssetListing<COIN> {
             id: object::new(ctx),
+            interface: listing.interface,
             asset: right_asset,
             price: right_price,
             time_granularity: listing.time_granularity,
@@ -303,6 +305,7 @@ module hummingbird::marketplace {
         listing.price    = proportional_price(listing.price, old_bw, split_bw);
         AssetListing<COIN> {
             id: object::new(ctx),
+            interface: listing.interface,
             asset: upper_asset,
             price: upper_price,
             time_granularity: listing.time_granularity,
@@ -377,7 +380,7 @@ module hummingbird::marketplace {
         ctx: &mut TxContext,
     ): (HummingbirdAsset, Coin<COIN>) {
         let AssetListing<COIN> {
-            id, asset, price, time_granularity: _, min_bandwidth: _, seller,
+            id, interface: _, asset, price, time_granularity: _, min_bandwidth: _, seller,
         } = listing;
         object::delete(id);
         assert!(coin::value(&payment) >= price, EInsufficientPayment);
@@ -414,7 +417,7 @@ module hummingbird::marketplace {
         object_bag::add(
             registry::interface_listings(interface),
             listing_id,
-            AssetListing<COIN> { id, asset, price, time_granularity, min_bandwidth, seller },
+            AssetListing<COIN> { id, interface: interface_address, asset, price, time_granularity, min_bandwidth, seller },
         );
         listing_id
     }
