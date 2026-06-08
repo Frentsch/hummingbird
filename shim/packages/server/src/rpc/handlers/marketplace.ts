@@ -29,6 +29,7 @@ import {
   getObjectFields,
   getAllListingsOf,
   getAllInterfacesOf,
+  getAllRegistries,
 } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
@@ -88,7 +89,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const created = result.effects.created?.[0]?.reference?.objectId ?? '0x0';
       const assetId = BigInt(created);
 
-      return new PublishAssetResponse({ assetId });
+      return new PublishAssetResponse({ assetId: created });
     },
 
     async searchAssets(_req, _ctx) {
@@ -105,12 +106,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         });
 
         const ownedAssets: Asset[] = result.data
-          .filter(obj => obj.data?.content?.dataType === 'moveObject')
-          .map(obj => SuiToRpcAsset(obj)
+          .filter((obj: any) => obj.data?.content?.dataType === 'moveObject')
+          .map((obj: any) => SuiToRpcAsset(obj)
           );
         
         return new SearchAssetsResponse({ owned: _req.owned, assets: ownedAssets });
       }else{
+        function ListingsToAssets(listings: any[]) {
+          return listings.filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject').map(obj => ListingToQueryAsset(obj));
+        };
         if(_req.ia){
           const isdAsId = _req.ia;
           // Derive AsRegistry from GlobalRegistry + isdAsId
@@ -119,9 +123,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             'u64',
             bcs.U64.serialize(BigInt(isdAsId)).toBytes(),
           );
-          console.log(`[debug] asRegistryId: ${asRegistryId}`);
+          console.log(`[debug] asRegistryId ${asRegistryId}`);
 
           if(_req.ifIdIngress || _req.ifIdEgress){
+            console.log("Find specific Interface");
             // Find specific as-interface
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
             if (isdAsId === undefined || interfaceId === undefined) throw new ConnectError("ia and interface id must be specified", Code.InvalidArgument);
@@ -136,28 +141,54 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             console.log(`Interface: ${interfaceObjId}`);
 
             const listingObjs = await getAllListingsOf(interfaceObjId, state.client);
-
-            const assets: Asset[] = listingObjs
-              .filter(obj => obj.data?.content?.dataType === 'moveObject')
-              .map(obj => ListingToQueryAsset(obj));
-
+            console.log(listingObjs);
+            /*const assets: Asset[] = listingObjs
+              .filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject')
+              .map((obj: any) => ListingToQueryAsset(obj));*/
+            
+            const assets: Asset[] = ListingsToAssets(listingObjs);
             return new SearchAssetsResponse({ owned: _req.owned, assets });
           }else{
+            console.log("Find all listings of AS");
+            try{
             //fetch all interfaces of the specified AS and add their listings
             const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
-            var assets: Asset[] = [];
-            interfaceIds.forEach(async interfaceId => {
-              assets.push(
-                (await getAllListingsOf(interfaceId, state.client))
-                .filter(obj => obj.data?.content?.dataType === 'moveObject')
-                .map(obj => ListingToQueryAsset(obj)))
-            });
+            console.log(interfaceIds);
+
+            var listings: any[] = [];
+            for(const interfaceId of interfaceIds){
+              const ls = await getAllListingsOf(interfaceId, state.client);
+              listings.push(...ls);
+            }
+            
+            var assets: Asset[] = ListingsToAssets(listings)//[];
+            //assets.push(...listings.filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject').map(obj => ListingToQueryAsset(obj)));
+           
             return new SearchAssetsResponse({ owned: _req.owned, assets});
+          }catch(error){
+            console.log(error);
+          }
+          throw new ConnectError("Failed to fetch all Listings");
           }
         }else{
+          var result: any[] = [];
+          try{
+          const asRegistries = await getAllRegistries(state.globalRegistryId, state.client);
+          for(const asRegistry of asRegistries){
+            const interfaces = await getAllInterfacesOf(asRegistry,state.client);
+            for(const interfaceId of interfaces){
+              const listings = await getAllListingsOf(interfaceId, state.client);
+              result.push(...listings);
+            }
+          }
+          console.log(result);
+          }catch (error){
+            console.log(error);
+          }
           // No AS Specified
           // asRegistries = getDyanmicFields(globalRegistry)
           //foreach AsRegistry in asRegistries: getAllInterfacesOf(asRegistry).foreach(getAllListingsOf)
+          return new SearchAssetsResponse({owned: _req.owned, assets: ListingsToAssets(result)});
         }
       }
     },
@@ -170,6 +201,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         // asset.assetId encodes the object ID as string hex
         const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
         console.log(listingId);
+        if(asset.startsAtExactly === undefined || asset.stopsAtExactly == undefined) throw new ConnectError(`must specifiy start and stop time for asset ${asset.assetId}`);
         const start = Number(asset.startsAtExactly.seconds);
         const stop = Number(asset.stopsAtExactly.seconds);
 
@@ -209,8 +241,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async redeemAsset(req, _ctx) {
-      const ingressId = '0x' + req.ingressAssetId.toString(16).padStart(64, '0');
-      const egressId = '0x' + req.egressAssetId.toString(16).padStart(64, '0');
+      const ingressId = '0x' + BigInt(req.ingressAssetId).toString(16).padStart(64, '0');
+      const egressId = '0x' + BigInt(req.egressAssetId).toString(16).padStart(64, '0');
 
       // Generate a transient EC keypair public key placeholder — caller supplies actual key via HTTP
       const publicKey = new Uint8Array(32);
@@ -222,9 +254,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         tx,
       );
 
+      //TODO wait for redemption delivery, decrypt and send back
       return new RedeemAssetResponse({
-        ak: result.digest,
-        resId: req.ingressAssetId,
+        ak: "0x00",
+        resId: BigInt(req.ingressAssetId),
         bwRounded: 0n,
         bwDataplaneEncoding: 0,
       });

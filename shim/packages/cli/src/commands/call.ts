@@ -156,7 +156,7 @@ export function makeCallCommand(): Command {
     ).action(
       async (opts: {
         config: string;
-        interfaceObjectId: string;
+        interfaceObjectId?: string;
         interfaceType: number;
         asAuthCapId?: string;
         sellerAuthTokenId?: string;
@@ -175,7 +175,7 @@ export function makeCallCommand(): Command {
           ctx,
           buildCreateListing({
             packageId: ctx.config.package.id,
-            interfaceObjectId: resolve(opts.interfaceObjectId, ctx.config.as?.interfaces[0], 'interface-object-id'),
+            interfaceObjectId: resolve(opts.interfaceObjectId, ctx.config.as?.interfaces ? ctx.config.as.interfaces[0]:undefined, 'interface-object-id'),
             interfaceType: opts.interfaceType,
             asAuthCapId,
             sellerAuthTokenId,

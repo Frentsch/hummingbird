@@ -1,7 +1,9 @@
-import type { SuiJsonRpcClient } from '@sui-shim/core';
+import { deriveObjectID, fromBase64 } from '@mysten/sui/utils';
+import type { SuiJsonRpcClient } from '../sui-client.js';
+import { bcs } from '@mysten/sui/bcs';
 
 export async function getAllListingsOf(interfaceId: string, client: SuiJsonRpcClient): Promise<any>{
-// Fetch the Interface object to locate the listings ObjectBag
+    // Fetch the Interface object to locate the listings ObjectBag
     const interfaceObj = await client.getObject({
         id: interfaceId,
         options: { showContent: true },
@@ -9,12 +11,10 @@ export async function getAllListingsOf(interfaceId: string, client: SuiJsonRpcCl
     if (!interfaceObj.data?.content || interfaceObj.data.content.dataType !== 'moveObject') {
         return [];
     }
-    console.log(interfaceObj);
     // Extract the ObjectBag ID from Interface.listings
     const interfaceFields = (interfaceObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    console.log(interfaceFields);
     const bagId = ((interfaceFields['listings'] as { fields: { id: { id: string } } }).fields.id.id);
-    console.log(bagId);
+    
     // Paginate through all dynamic fields of the ObjectBag to collect listing IDs
     const listingIds: string[] = [];
     let cursor: string | null = null;
@@ -24,7 +24,6 @@ export async function getAllListingsOf(interfaceId: string, client: SuiJsonRpcCl
         cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
     } while (cursor !== null);
 
-    console.log(listingIds);
     if (listingIds.length === 0) {
         [];
     }
@@ -38,7 +37,7 @@ export async function getAllListingsOf(interfaceId: string, client: SuiJsonRpcCl
 }
 
 export async function getAllInterfacesOf(asRegsitryid: string, client: SuiJsonRpcClient): Promise<string[]>{
-    console.log("Collecting Interfaces");
+
     const registryObj = await client.getObject({
         id: asRegsitryid,
         options: { showContent: true },
@@ -49,19 +48,22 @@ export async function getAllInterfacesOf(asRegsitryid: string, client: SuiJsonRp
     }
     // Extract the ObjectBag ID from Interface.listings
     const registryFields = (registryObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    console.log(registryFields);
-    const bagId = ((registryFields['interfaces'] as { fields: { id: { id: string } } }).fields.id.id);
 
+    const bagId = ((registryFields['interfaces'] as { fields: { id: { id: string } } }).fields.id.id);
+ 
     // Paginate through all dynamic fields of the Table to collect listing IDs
     const interfaceIds: string[] = [];
     let cursor: string | null = null;
     do {
         const page = await client.getDynamicFields({ parentId: bagId, cursor });
-        interfaceIds.push(...page.data.map(f => f.objectId));
+        interfaceIds.push(...page.data.map(f => {
+            const iid = bcs.U16.fromBase64(f.bcsName);
+            const addr = deriveObjectID(asRegsitryid,'u16' ,fromBase64(f.bcsName));
+            return addr;
+            }
+        ));
         cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
     } while (cursor !== null);
-    console.log("interface ids");
-    console.log(interfaceIds);
     return interfaceIds;
 }
 
@@ -76,15 +78,15 @@ export async function getAllRegistries(globalRegistryId: string, client: SuiJson
     }
     // Extract the ObjectBag ID from Interface.listings
     const registryFields = (registryObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    //TODO check if field is called asRegistries or as_registries in ts
-    const bagId = ((registryFields['asRegistries'] as { fields: { id: { id: string } } }).fields.id.id);
+  
+    const bagId = ((registryFields['as_registries'] as { fields: { id: { id: string } } }).fields.id.id);
 
     // Paginate through all dynamic fields of the ObjectBag to collect listing IDs
     const registryIds: string[] = [];
     let cursor: string | null = null;
     do {
         const page = await client.getDynamicFields({ parentId: bagId, cursor });
-        registryIds.push(...page.data.map(f => f.objectId));
+        registryIds.push(...page.data.map(f => deriveObjectID(globalRegistryId,'u64' ,fromBase64(f.bcsName))));
         cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
     } while (cursor !== null);
 

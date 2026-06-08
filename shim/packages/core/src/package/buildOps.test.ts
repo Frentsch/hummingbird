@@ -30,7 +30,6 @@ describe('transaction builders', () => {
       asRegistryId: FAKE_OBJ,
       asAuthCapId: FAKE_OBJ,
       interfaceId: 1,
-      interfaceType: 0,
     });
     expect(tx).toBeInstanceOf(Transaction);
   });
@@ -39,6 +38,7 @@ describe('transaction builders', () => {
     const tx = buildCreateListing({
       packageId: FAKE_PKG,
       interfaceObjectId: FAKE_OBJ,
+      interfaceType: 0,
       asAuthCapId: FAKE_OBJ,
       sellerAuthTokenId: FAKE_OBJ,
       bandwidth: 1000n,
@@ -60,7 +60,7 @@ describe('transaction builders', () => {
       startTime: 1000n,
       expTime: 2000n,
       bandwidth: 500n,
-      paymentCoinId: FAKE_OBJ,
+      maxPrice: 100000n,
       coinType: COIN_TYPE,
     });
     // listingId is passed as tx.pure.id() — enforced in the wrapper source.

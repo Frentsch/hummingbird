@@ -7,7 +7,7 @@ function assetFromFields(objectId: string, assetFields: Record<string, unknown>,
     const start = BigInt(assetFields['start_time'] as string);
     const exp = BigInt(assetFields['exp_time'] as string);
     return new Asset({
-        assetId: BigInt(objectId),
+        assetId: BigInt(objectId).toString(),
         ia: BigInt(assetFields['isd_as_id'] as string),
         assetType: interfaceType === 0 ? AssetType.Ingress : AssetType.Egress,
         ...(interfaceType === 0 ? { ifIdIngress: interfaceId } : {}),
