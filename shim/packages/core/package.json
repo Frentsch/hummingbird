@@ -16,6 +16,8 @@
   "dependencies": {
     "@mysten/bcs": "^2.0.5",
     "@mysten/sui": "^2.17.0",
+    "@protobuf-ts/grpc-transport": "^2.11.1",
+    "@grpc/grpc-js": "^1.14.4",
     "smol-toml": "^1.6.1",
     "zod": "^4.4.0"
   },

@@ -32,7 +32,10 @@ export const ConfigSchema = z.object({
     asAuthCapId: z.string().optional(),
     sellerAuthTokenId: z.string().optional(),
     interfaces: z.array(z.string()).optional(),
-  })
+  }),
+  redemption: z.object({
+    timeoutSecs: z.number().int().min(1).default(60),
+  }).default({ timeoutSecs: 60 }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
