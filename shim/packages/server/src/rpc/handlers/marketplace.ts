@@ -235,8 +235,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     async redeemAsset(req, _ctx) {
       const ingressId = '0x' + BigInt(req.ingressAssetId).toString(16).padStart(64, '0');
       const egressId = '0x' + BigInt(req.egressAssetId).toString(16).padStart(64, '0');
-
-      // Generate a transient EC keypair public key placeholder — caller supplies actual key via HTTP
+      console.log(ingressId);
+      console.log(egressId);
+      try {
+      // Public key management is TBD; hardcoded zeros for now
       const publicKey = new Uint8Array(32);
 
       const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
@@ -245,10 +247,35 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         state.signer,
         tx,
       );
+      console.log("result");
+      console.log(result);
+      // The redeem() call creates a RedeemRequest object owned by the AS issuer
+      const redeemRequestObjectId = extractCreatedObjectId(
+        result,
+        getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
+      );
+      console.log(redeemRequestObjectId);
 
-      //TODO wait for redemption delivery, decrypt and send back
+      // Wait for the AS to call deliver_reservation(), which deletes the RedeemRequest
+      // and emits ReservationDelivered with the encrypted keys
+      let encryptedReservation: Uint8Array;
+        const delivery = await state.deliveryListener.waitForDelivery(
+          redeemRequestObjectId,
+          state.packageId,
+          state.config.redemption.timeoutSecs * 1000,
+        );
+        encryptedReservation = delivery.encryptedReservation;
+        console.log(encryptedReservation);
+      } catch (err) {
+        console.log(err);
+        if (err instanceof DeliveryTimeoutError) {
+          throw new ConnectError('AS did not deliver reservation in time', Code.DeadlineExceeded);
+        }
+        throw err;
+      }
+
       return new RedeemAssetResponse({
-        ak: "0x00",
+        ak: Array.from(encryptedReservation, (b) => b.toString(16).padStart(2, '0')).join(''),
         resId: BigInt(req.ingressAssetId),
         bwRounded: 0n,
         bwDataplaneEncoding: 0,
@@ -256,6 +283,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     fetchReservations(_req, _ctx) {
+
       return new FetchReservationsResponse({ reservations: [] });
     },
 

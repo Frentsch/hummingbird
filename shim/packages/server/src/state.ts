@@ -1,4 +1,4 @@
-import type { SuiJsonRpcClient, Config } from '@sui-shim/core';
+import type { SuiJsonRpcClient, Config, DeliveryListener } from '@sui-shim/core';
 import type { Keypair } from '@mysten/sui/cryptography';
 
 export interface AppState {
@@ -12,4 +12,5 @@ export interface AppState {
   sellerAuthTokenId: string;
   /** interface_id (u16) → on-chain object ID */
   interfaceObjects: Map<number, string>;
+  deliveryListener: DeliveryListener;
 }
