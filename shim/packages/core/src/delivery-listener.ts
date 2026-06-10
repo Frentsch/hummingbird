@@ -15,6 +15,7 @@ export class DeliveryTimeoutError extends Error {
 // BCS layout of ReservationDelivered { isd_as_id: u64, public_key: vector<u8>, encrypted_reservation: vector<u8> }
 const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   isd_as_id: bcs.u64(),
+  redeem_request_id: bcs.Address,
   public_key: bcs.vector(bcs.u8()),
   encrypted_reservation: bcs.vector(bcs.u8()),
 });
@@ -59,27 +60,36 @@ export class DeliveryListener {
             if (!checkpoint) continue;
 
             for (const tx of checkpoint.transactions) {
+              /*
               // Confirm this tx deletes the expected RedeemRequest object
               const deletesRequest = (tx.effects?.changedObjects ?? []).some(
                 (c: { idOperation?: number; objectId?: string }) =>
                   c.idOperation === DELETED &&
                   (c.objectId ?? '').toLowerCase() === normalizedId,
               );
-              if (!deletesRequest) continue;
+              if (!deletesRequest) continue;*/
 
               // Find the matching ReservationDelivered event in the same tx
               for (const event of tx.events?.events ?? []) {
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;
-
+                
+                let decoded: { redeem_request_id: string; encrypted_reservation: number[] };
                 try {
-                  const decoded = ReservationDeliveredBCS.parse(event.contents.value);
-                  clearTimeout(timer);
-                  resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation) });
-                  return;
+                  const fullDecode = ReservationDeliveredBCS.parse(event.contents.value);
+                  console.log(fullDecode);
+                  decoded = ReservationDeliveredBCS.parse(event.contents.value);
                 } catch (err) {
                   console.error('[DeliveryListener] BCS decode error:', err);
+                  continue;
                 }
+                console.log(decoded);
+                
+                if (decoded.redeem_request_id.toLowerCase() !== normalizedId) continue;
+
+                clearTimeout(timer);
+                resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation) });
+                return;
               }
             }
           }

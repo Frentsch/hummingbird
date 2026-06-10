@@ -43,6 +43,9 @@ out/
 .yarn/install-state.gz
 .pnp.*
 
+# proto
+shim/packages/server/src/rpc/gen
+
 ### Windows
 # Windows thumbnail cache files
 Thumbs.db

@@ -17,7 +17,7 @@ pnpm exec sui-shim call create-interface `
 
 pnpm exec sui-shim call create-listing `
 --interface-object-id <id> `
---interface-type = 0 `
+--interface-type 0 `
 --bandwidth 100 `
 --start-time 1000 `
 --exp-time 2000 `
@@ -42,3 +42,8 @@ pnpm exec sui-shim call buy-and-take `
 # 3. Manage daemon callers while daemon is running
 pnpm exec sui-shim callers add mysecretkey123
 pnpm exec sui-shim callers list
+
+
+# proto
+
+pnpm gen:proto

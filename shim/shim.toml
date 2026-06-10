@@ -1,5 +1,6 @@
 [network]
 name = "testnet"
+grpcUrl = "fullnode.testnet.sui.io:443"
 
 [keystore]
 path = "/home/frentsch/.sui/sui_config/sui.keystore"
@@ -12,11 +13,14 @@ token = "some-bearer-token"
 port = 9091
 
 [package]
-id = "0x974211a08f04c78e4cf48464204bc9b4c27c72957b1736c40242dea9b6c0afbe"
-globalRegistryId = "0xa5b23c6d4303cdebbd5a0961f43dfca2672624f74dd2e72cdd3d667f6810b08d"
+id = "0xf4b95d0b14260bcd448d64264d00452ec797d8dd91a6de08d5042ee5bf5a8698"
+globalRegistryId = "0x27659d7419f21029b5459627d4170ef3b1068072262046f5cc1cea14ffba5480"
 
 [as]
-asRegistryId = "0xca42ebf40d32e7a24ff9593ab1fdf5aa949a47dadc7cb707632fb10a19a0a840"
-asAuthCapId = "0x9ef2141a99e9312424150f3856abbb838a7f82dd8578a010aef69de47122188f"
-sellerAuthTokenId = "0xbc839695c1e120e2714951eafe67ac207e48cf2cf36cf05d0026c525634c01b8"
-interfaces = [ "0x80a3e237d527fa0b41676149c89d80fd4fe7e183f1553f488c5a85d9254efe11" ]
+asRegistryId = "0x542f50827f4f4e57ac8d7ee47681e9a6eed7d9d079ebf557c43c4225e6ff5d58"
+asAuthCapId = "0x0d55e4857008bce97126f09923d2f8a36b243c0430884eca24b4f15de5111d73"
+sellerAuthTokenId = "0xc26888e779487204c6e8dabf05b9355d238eab3373523ce227161348f6a617c0"
+interfaces = [ "0xeec6c62fd40018ace6de7a932953e0913ca128d28f0f5ca44a6453842449122d" ]
+
+[redemption]
+timeoutSecs = 60
