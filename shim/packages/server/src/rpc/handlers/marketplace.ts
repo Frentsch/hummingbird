@@ -30,6 +30,7 @@ import {
   getAllListingsOf,
   getAllInterfacesOf,
   getAllRegistries,
+  DeliveryTimeoutError,
 } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
@@ -149,11 +150,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             const assets: Asset[] = ListingsToAssets(listingObjs);
             return new SearchAssetsResponse({ owned: _req.owned, assets });
           }else{
-            console.log("Find all listings of AS");
             try{
             //fetch all interfaces of the specified AS and add their listings
             const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
-            console.log(interfaceIds);
 
             var listings: any[] = [];
             for(const interfaceId of interfaceIds){
@@ -161,16 +160,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
               listings.push(...ls);
             }
             
-            var assets: Asset[] = ListingsToAssets(listings)//[];
-            //assets.push(...listings.filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject').map(obj => ListingToQueryAsset(obj)));
-           
-            return new SearchAssetsResponse({ owned: _req.owned, assets});
+            return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(listings)});
           }catch(error){
             console.log(error);
           }
           throw new ConnectError("Failed to fetch all Listings");
           }
         }else{
+          //Fetch all Listings
           var result: any[] = [];
           try{
           const asRegistries = await getAllRegistries(state.globalRegistryId, state.client);
@@ -181,13 +178,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
               result.push(...listings);
             }
           }
-          console.log(result);
           }catch (error){
             console.log(error);
           }
-          // No AS Specified
-          // asRegistries = getDyanmicFields(globalRegistry)
-          //foreach AsRegistry in asRegistries: getAllInterfacesOf(asRegistry).foreach(getAllListingsOf)
           return new SearchAssetsResponse({owned: _req.owned, assets: ListingsToAssets(result)});
         }
       }
@@ -196,48 +189,47 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
     async buyAssets(req, _ctx) {
       const bought: BoughtAsset[] = [];
-      
+      var totalPrice = 0;
       for (const asset of req.assets) {
         // asset.assetId encodes the object ID as string hex
         const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
-        console.log(listingId);
         if(asset.startsAtExactly === undefined || asset.stopsAtExactly == undefined) throw new ConnectError(`must specifiy start and stop time for asset ${asset.assetId}`);
+        if(asset.bwExact === undefined) throw new ConnectError("Must specify exact bandwidth");
         const start = Number(asset.startsAtExactly.seconds);
         const stop = Number(asset.stopsAtExactly.seconds);
 
         const listing = await state.client.getObject({ id: listingId, options: { showContent: true } });
         const fields = getObjectFields(listing);
         const interfaceObjectId = fields['interface'] as string;
-        const assetId = (fields['asset'] as Record<string, unknown>)['id'] as string;
-        console.log(interfaceObjectId);
-        console.log(BigInt(start));
-        console.log(BigInt(stop));
-        console.log(BigInt(asset.bwExact));
-        console.log(BigInt(req.maxPrice));
+        const assetId = (fields['asset'] as Record<string, any>)['fields']['id']['id'] as string;
+        console.log(fields);
+        console.log(assetId);
         //TODO extract coin type from listing type annotation
+        //TODO build all transactions and buy in an atomic operation
         try{
-        const result = await executeTransaction(
-          state.client,
-          state.signer,
-          buildBuyAndTake({
-            packageId: state.config.package.id,
-            interfaceObjectId: interfaceObjectId,
-            listingId: listingId,
-            startTime: BigInt(start),
-            expTime: BigInt(stop),
-            bandwidth: BigInt(asset.bwExact),
-            maxPrice: BigInt(req.maxPrice),
-            coinType: DEFAULT_COIN_TYPE,
-        }));
-        console.log(result);
-        
-        bought.push(new BoughtAsset({assetId: assetId}));
-      }catch(error){
-        console.log(error);
-      }
+          const result = await executeTransaction(
+            state.client,
+            state.signer,
+            buildBuyAndTake({
+              packageId: state.config.package.id,
+              interfaceObjectId: interfaceObjectId,
+              listingId: listingId,
+              startTime: BigInt(start),
+              expTime: BigInt(stop),
+              bandwidth: BigInt(asset.bwExact),
+              maxPrice: BigInt(req.maxPrice),
+              coinType: DEFAULT_COIN_TYPE,
+          }));
+          console.log(result);
+          const balanceChange = result.balanceChanges?.find((c:any) => c.owner.AddressOwner === state.signer.toSuiAddress());
+          totalPrice -= Number(balanceChange?.amount ?? 0);
+          bought.push(new BoughtAsset({assetId: BigInt(assetId).toString()}));
+        }catch(error){
+          console.log(error);
+        }
       }
 
-      return new BuyAssetsResponse({ assets: bought, cost: 0n });
+      return new BuyAssetsResponse({ assets: bought, cost: BigInt(totalPrice)});
     },
 
     async redeemAsset(req, _ctx) {

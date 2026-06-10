@@ -10,6 +10,7 @@ export interface TxResult {
   effects: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['effects']>;
   /** Object changes (always present — showObjectChanges is forced true). */
   objectChanges: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['objectChanges']>;
+  balanceChanges: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['balanceChanges']>;
 }
 
 /**
@@ -28,6 +29,7 @@ export async function executeTransaction(
       showEffects: true,
       showEvents: true,
       showObjectChanges: true,
+      showBalanceChanges: true
     },
   });
   
@@ -46,7 +48,7 @@ export async function executeTransaction(
     );
   }
 
-  return { digest: response.digest, effects, objectChanges: response.objectChanges ?? [] };
+  return { digest: response.digest, effects, objectChanges: response.objectChanges ?? [], balanceChanges: response.balanceChanges ?? []};
 }
 
 /**
