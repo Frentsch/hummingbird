@@ -13,7 +13,7 @@ export type { CreateInterfaceParams } from './createInterface.js';
 export { buildCreateListing } from './createListing.js';
 export type { CreateListingParams } from './createListing.js';
 
-export { buildBuyAndTake } from './buyAndTake.js';
+export { buildBuyAndTake, addBuyAndTake } from './buyAndTake.js';
 export type { BuyAndTakeParams } from './buyAndTake.js';
 
 export { buildRedeem } from './redeem.js';

@@ -1,4 +1,5 @@
 import { Transaction } from '@mysten/sui/transactions';
+import type { TransactionArgument } from '@mysten/sui/transactions';
 import { DEFAULT_COIN_TYPE, moveTarget } from './manifest.js';
 
 export interface BuyAndTakeParams {
@@ -16,6 +17,7 @@ export interface BuyAndTakeParams {
   expTime: bigint;
   /** Desired bandwidth in kbps (u64). */
   bandwidth: bigint;
+  /** Upper bound on payment for this single-asset call (only used by buildBuyAndTake). */
   maxPrice: bigint;
   /** Coin type, e.g. "0x2::sui::SUI". */
   coinType: string;
@@ -27,9 +29,24 @@ export interface BuyAndTakeParams {
  */
 export function buildBuyAndTake(params: BuyAndTakeParams): Transaction {
   const tx = new Transaction();
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(params.maxPrice)]);
+  addBuyAndTake(tx, params, coin);
+  return tx;
+}
+
+/**
+ * Add a buy_and_take move call to an existing transaction block.
+ * `coin` must be a pre-split coin result (e.g. from tx.splitCoins).
+ * Use this to batch multiple purchases into a single atomic PTB.
+ */
+export function addBuyAndTake(
+  tx: Transaction,
+  params: Omit<BuyAndTakeParams, 'maxPrice'>,
+  coin: TransactionArgument,
+): void {
   tx.moveCall({
     target: moveTarget(params.packageId, 'buyAndTake'),
-    typeArguments: [params.coinType??DEFAULT_COIN_TYPE],
+    typeArguments: [params.coinType ?? DEFAULT_COIN_TYPE],
     arguments: [
       tx.object(params.interfaceObjectId),
       // listingId is an ObjectBag key, not an object input — pass as pure ID.
@@ -37,8 +54,7 @@ export function buildBuyAndTake(params: BuyAndTakeParams): Transaction {
       tx.pure.u64(params.startTime),
       tx.pure.u64(params.expTime),
       tx.pure.u64(params.bandwidth),
-      tx.splitCoins(tx.gas,[tx.pure.u64(params.maxPrice)]),
+      coin,
     ],
   });
-  return tx;
 }

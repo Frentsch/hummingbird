@@ -26,8 +26,6 @@ const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   bw_dataplane_encoding: bcs.u16(),
 });
 
-// ChangedObject_IdOperation.DELETED = 3 (from @mysten/sui grpc proto enum)
-const DELETED = 3;
 
 export class DeliveryListener {
   readonly #grpc: SuiGrpcClient;
@@ -66,16 +64,6 @@ export class DeliveryListener {
             if (!checkpoint) continue;
 
             for (const tx of checkpoint.transactions) {
-              /*
-              // Confirm this tx deletes the expected RedeemRequest object
-              const deletesRequest = (tx.effects?.changedObjects ?? []).some(
-                (c: { idOperation?: number; objectId?: string }) =>
-                  c.idOperation === DELETED &&
-                  (c.objectId ?? '').toLowerCase() === normalizedId,
-              );
-              if (!deletesRequest) continue;*/
-
-              // Find the matching ReservationDelivered event in the same tx
               for (const event of tx.events?.events ?? []) {
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;

@@ -39,6 +39,9 @@ export const ConfigSchema = z.object({
   db: z.object({
     path: z.string(),
   }).default({ path: './reservations.db' }),
+  transaction: z.object({
+    gasBudget: z.number().int().min(0).default(5_000_000),
+  }).default({ gasBudget: 5_000_000 }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

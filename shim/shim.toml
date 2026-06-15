@@ -13,14 +13,20 @@ token = "some-bearer-token"
 port = 9091
 
 [package]
-id = "0xf4b95d0b14260bcd448d64264d00452ec797d8dd91a6de08d5042ee5bf5a8698"
-globalRegistryId = "0x27659d7419f21029b5459627d4170ef3b1068072262046f5cc1cea14ffba5480"
+id = "0xe8f864c5ab8f7e89c7f4927d23acff41d1f42dcf3b6afffe2371213eaabbf771"
+globalRegistryId = "0x83c53943ef87eaeca7aae8cac719cde151b804103a00b3cc6725c944317643b0"
 
 [as]
-asRegistryId = "0x542f50827f4f4e57ac8d7ee47681e9a6eed7d9d079ebf557c43c4225e6ff5d58"
-asAuthCapId = "0x0d55e4857008bce97126f09923d2f8a36b243c0430884eca24b4f15de5111d73"
-sellerAuthTokenId = "0xc26888e779487204c6e8dabf05b9355d238eab3373523ce227161348f6a617c0"
-interfaces = [ "0xeec6c62fd40018ace6de7a932953e0913ca128d28f0f5ca44a6453842449122d" ]
+asRegistryId = "0xfa657bc41e22843f9d72336009acadd40ff3ee0336f73d959b4bc212dd41656d"
+asAuthCapId = "0x107f307e78656c0ac09911ec1eef9b35efc91a08ec87e56ba3be7d353a6bbfa6"
+sellerAuthTokenId = "0x87196a938fb0f1c2537a2412698cb49dbfc0b7f6a9dd5c39ca31ad297eb8a53f"
+interfaces = [ "0x0540077dca88af3d831f119d115822f7571f0e438fa344811c8f52d2e9c499c8" ]
+
+[transaction]
+gasBudget = 5000000
 
 [redemption]
 timeoutSecs = 60
+
+[db]
+path = "./reservations.db"

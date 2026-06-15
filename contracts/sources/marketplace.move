@@ -188,7 +188,9 @@ module hummingbird::marketplace {
             add_child_listing(interface, upper, &mut successor_ids);
         };
 
-        let total_paid = listing.price;
+        let duration   = hummingbird_asset::get_exp_time(&listing.asset) - hummingbird_asset::get_start_time(&listing.asset);
+        let bw         = hummingbird_asset::get_bandwidth(&listing.asset);
+        let total_paid = duration * bw * listing.price;
         let isd_as_id = registry::interface_isd_as_id(interface);
         let interface_id = registry::interface_id(interface);
         let interface_type = hummingbird_asset::get_interface_type(&listing.asset);
@@ -256,11 +258,6 @@ module hummingbird::marketplace {
 
     // --- Internal helpers ---
 
-    /// Price scaled proportionally, rounded up (ceiling division).
-    fun proportional_price(original_price: u64, original_size: u64, new_size: u64): u64 {
-        (original_price * new_size - 1) / original_size + 1
-    }
-
     fun split_listing_time<COIN>(
         listing: &mut AssetListing<COIN>,
         split_time: u64,
@@ -275,13 +272,11 @@ module hummingbird::marketplace {
             EInvalidInterval
         );
         let right_asset = hummingbird_asset::split_time(&mut listing.asset, split_time, ctx);
-        let right_price = proportional_price(listing.price, old_exp - old_start, old_exp - split_time);
-        listing.price   = proportional_price(listing.price, old_exp - old_start, split_time - old_start);
         AssetListing<COIN> {
             id: object::new(ctx),
             interface: listing.interface,
             asset: right_asset,
-            price: right_price,
+            price: listing.price,
             time_granularity: listing.time_granularity,
             min_bandwidth: listing.min_bandwidth,
             seller: listing.seller,
@@ -300,14 +295,12 @@ module hummingbird::marketplace {
                 && old_bw - split_bw >= listing.min_bandwidth,
             EInvalidBandwidth
         );
-        let upper_asset  = hummingbird_asset::split_bandwidth(&mut listing.asset, split_bw, ctx);
-        let upper_price  = proportional_price(listing.price, old_bw, old_bw - split_bw);
-        listing.price    = proportional_price(listing.price, old_bw, split_bw);
+        let upper_asset = hummingbird_asset::split_bandwidth(&mut listing.asset, split_bw, ctx);
         AssetListing<COIN> {
             id: object::new(ctx),
             interface: listing.interface,
             asset: upper_asset,
-            price: upper_price,
+            price: listing.price,
             time_granularity: listing.time_granularity,
             min_bandwidth: listing.min_bandwidth,
             seller: listing.seller,
@@ -383,8 +376,11 @@ module hummingbird::marketplace {
             id, interface: _, asset, price, time_granularity: _, min_bandwidth: _, seller,
         } = listing;
         object::delete(id);
-        assert!(coin::value(&payment) >= price, EInsufficientPayment);
-        let payment_coin = coin::split(&mut payment, price, ctx);
+        let duration        = hummingbird_asset::get_exp_time(&asset) - hummingbird_asset::get_start_time(&asset);
+        let bw              = hummingbird_asset::get_bandwidth(&asset);
+        let effective_price = duration * bw * price;
+        assert!(coin::value(&payment) >= effective_price, EInsufficientPayment);
+        let payment_coin = coin::split(&mut payment, effective_price, ctx);
         transfer::public_transfer(payment_coin, seller.payment_address);
         (asset, payment)
     }

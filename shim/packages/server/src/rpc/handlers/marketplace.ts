@@ -16,11 +16,12 @@ import {
   Reservation,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
+import { Transaction } from '@mysten/sui/transactions';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import {
   buildCreateListing,
-  buildBuyAndTake,
+  addBuyAndTake,
   buildRedeem,
   DEFAULT_COIN_TYPE,
   executeTransaction,
@@ -192,50 +193,85 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
 
     async buyAssets(req, _ctx) {
-      const bought: BoughtAsset[] = [];
-      var totalPrice = 0;
+      try{
+      // Validate all assets upfront before touching the chain.
       for (const asset of req.assets) {
-        // asset.assetId encodes the object ID as string hex
-        const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
-        if(asset.startsAtExactly === undefined || asset.stopsAtExactly == undefined) throw new ConnectError(`must specifiy start and stop time for asset ${asset.assetId}`);
-        if(asset.bwExact === undefined) throw new ConnectError("Must specify exact bandwidth");
-        const start = Number(asset.startsAtExactly.seconds);
-        const stop = Number(asset.stopsAtExactly.seconds);
-
-        const listing = await state.client.getObject({ id: listingId, options: { showContent: true } });
-        const fields = getObjectFields(listing);
-        const interfaceObjectId = fields['interface'] as string;
-        const assetId = (fields['asset'] as Record<string, any>)['fields']['id']['id'] as string;
-        console.log(fields);
-        console.log(assetId);
-        //TODO extract coin type from listing type annotation
-        //TODO build all transactions and buy in an atomic operation
-        const { totalBalance } = await state.client.getBalance({owner: state.signer.toSuiAddress()});
-        console.log(totalBalance);
-        try{
-          const result = await executeTransaction(
-            state.client,
-            state.signer,
-            buildBuyAndTake({
-              packageId: state.config.package.id,
-              interfaceObjectId: interfaceObjectId,
-              listingId: listingId,
-              startTime: BigInt(start),
-              expTime: BigInt(stop),
-              bandwidth: BigInt(asset.bwExact),
-              maxPrice: req.maxPrice>BigInt(totalBalance)?BigInt(totalBalance):req.maxPrice,
-              coinType: DEFAULT_COIN_TYPE,
-          }));
-          console.log(result);
-          const balanceChange = result.balanceChanges?.find((c:any) => c.owner.AddressOwner === state.signer.toSuiAddress());
-          totalPrice -= Number(balanceChange?.amount ?? 0);
-          bought.push(new BoughtAsset({assetId: BigInt(assetId).toString()}));
-        }catch(error){
-          console.log(error);
-        }
+        if (asset.startsAtExactly === undefined || asset.stopsAtExactly === undefined)
+          throw new ConnectError(`must specify start and stop time for asset ${asset.assetId}`);
+        if (asset.bwExact === undefined)
+          throw new ConnectError(`must specify exact bandwidth for asset ${asset.assetId}`);
       }
 
-      return new BuyAssetsResponse({ assets: bought, cost: BigInt(totalPrice)});
+      // Fetch all listing objects and wallet balance in parallel.
+      const [listingResults, { totalBalance }] = await Promise.all([
+        Promise.all(req.assets.map(asset => {
+          const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
+          return state.client.getObject({ id: listingId, options: { showContent: true } });
+        })),
+        state.client.getBalance({ owner: state.signer.toSuiAddress() }),
+      ]);
+
+      // Compute effective price for each asset: duration * bandwidth * unit_price.
+      type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; effectivePrice: bigint };
+      const metas: AssetMeta[] = req.assets.map((asset, i) => {
+        const fields = getObjectFields(listingResults[i]);
+        const interfaceObjectId = fields['interface'] as string;
+        const assetId = (fields['asset'] as Record<string, any>)['fields']['id']['id'] as string;
+        const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
+        const unitPrice = BigInt(fields['price'] as string);
+        const reqStart = BigInt(asset.startsAtExactly!.seconds);
+        const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
+        const reqBw    = BigInt(asset.bwExact!);
+        const effectivePrice = (reqExp - reqStart) * reqBw * unitPrice;
+        return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
+      });
+      
+      const totalPrice = metas.reduce((sum, m) => sum + m.effectivePrice, 0n);
+
+      const gasBudget = BigInt(state.config.transaction.gasBudget);
+      const spendable = BigInt(totalBalance) > gasBudget ? BigInt(totalBalance) - gasBudget : 0n;
+      const effectiveMax = req.maxPrice < spendable ? req.maxPrice : spendable;
+
+      if (effectiveMax < totalPrice)
+        throw new ConnectError(`spendable balance (${effectiveMax}) is below estimated total cost (${totalPrice})`);
+
+      // Build a single PTB — one buyAndTake call per asset, all atomic.
+
+      const tx = new Transaction();
+      tx.setGasBudget(gasBudget);
+      const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(effectiveMax)]);
+
+      const slack = effectiveMax - totalPrice;
+      for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
+        const slotMax = meta.effectivePrice + (totalPrice > 0n ? slack * meta.effectivePrice / totalPrice : 0n);
+        const [slotCoin] = tx.splitCoins(paymentCoin, [tx.pure.u64(slotMax)]);
+        addBuyAndTake(tx, {
+          packageId: state.config.package.id,
+          interfaceObjectId: meta.interfaceObjectId,
+          listingId: meta.listingId,
+          startTime: BigInt(asset.startsAtExactly!.seconds),
+          expTime:   BigInt(asset.stopsAtExactly!.seconds),
+          bandwidth: BigInt(asset.bwExact!),
+          coinType: DEFAULT_COIN_TYPE,
+        }, slotCoin);
+      }
+
+      // Reclaim any unspent remainder from the payment coin.
+      tx.mergeCoins(tx.gas, [paymentCoin]);
+
+      // Execute atomically — all succeed or none go through.
+      const result = await executeTransaction(state.client, state.signer, tx);
+      console.log(result);
+
+      const balanceChange = result.balanceChanges?.find((c: any) => c.owner.AddressOwner === state.signer.toSuiAddress());
+      const cost = BigInt(-Number(balanceChange?.amount ?? 0));
+
+      const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
+      return new BuyAssetsResponse({ assets: bought, cost });}
+      catch(error){
+        console.log(error);
+        throw error;
+      }
     },
 
     async redeemAsset(req, _ctx) {
@@ -265,14 +301,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           state.signer,
           tx,
         );
-        console.log("result");
-        console.log(result);
+        
         // The redeem() call creates a RedeemRequest object owned by the AS issuer
         const redeemRequestObjectId = extractCreatedObjectId(
           result,
           getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
         );
-        console.log(redeemRequestObjectId);
 
         // Wait for the AS to call deliver_reservation(), which deletes the RedeemRequest
         // and emits ReservationDelivered with the encrypted keys
@@ -283,6 +317,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         );
         const ak = new TextDecoder().decode(delivery.encryptedReservation);
         console.log(ak);
+        console.log(delivery.resId);
 
         insertReservation(state.db, {
           resId:     delivery.resId,
@@ -319,6 +354,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.toDate();
       if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.toDate();
       const rows = queryReservations(state.db, filter);
+      console.log(rows);
       return new FetchReservationsResponse({
         reservations: rows.map(r => new Reservation({
           resId:     r.resId,
