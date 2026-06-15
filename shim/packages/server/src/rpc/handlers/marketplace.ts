@@ -32,7 +32,10 @@ import {
   getAllInterfacesOf,
   getAllRegistries,
   DeliveryTimeoutError,
+  insertReservation,
+  queryReservations,
 } from '@sui-shim/core';
+import type { ReservationFilter } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 
@@ -111,7 +114,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           .filter((obj: any) => obj.data?.content?.dataType === 'moveObject')
           .map((obj: any) => SuiToRpcAsset(obj)
           );
-        
+
         return new SearchAssetsResponse({ owned: _req.owned, assets: ownedAssets });
       }else{
         function ListingsToAssets(listings: any[]) {
@@ -132,7 +135,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             // Find specific as-interface
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
             if (isdAsId === undefined || interfaceId === undefined) throw new ConnectError("ia and interface id must be specified", Code.InvalidArgument);
-            
+
 
             // Derive Interface from AsRegistry + interfaceId
             const interfaceObjId = deriveObjectID(
@@ -147,7 +150,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             /*const assets: Asset[] = listingObjs
               .filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject')
               .map((obj: any) => ListingToQueryAsset(obj));*/
-            
+
             const assets: Asset[] = ListingsToAssets(listingObjs);
             return new SearchAssetsResponse({ owned: _req.owned, assets });
           }else{
@@ -160,7 +163,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
               const ls = await getAllListingsOf(interfaceId, state.client);
               listings.push(...ls);
             }
-            
+
             return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(listings)});
           }catch(error){
             console.log(error);
@@ -207,6 +210,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         console.log(assetId);
         //TODO extract coin type from listing type annotation
         //TODO build all transactions and buy in an atomic operation
+        const { totalBalance } = await state.client.getBalance({owner: state.signer.toSuiAddress()});
+        console.log(totalBalance);
         try{
           const result = await executeTransaction(
             state.client,
@@ -218,7 +223,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
               startTime: BigInt(start),
               expTime: BigInt(stop),
               bandwidth: BigInt(asset.bwExact),
-              maxPrice: BigInt(req.maxPrice),
+              maxPrice: req.maxPrice>BigInt(totalBalance)?BigInt(totalBalance):req.maxPrice,
               coinType: DEFAULT_COIN_TYPE,
           }));
           console.log(result);
@@ -239,41 +244,62 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       console.log(ingressId);
       console.log(egressId);
       try {
-      // Public key management is TBD; hardcoded zeros for now
-      const publicKey = new Uint8Array(32);
+        // Fetch asset fields before buildRedeem wraps them into a RedeemRequest on-chain
+        const ingressObj = await state.client.getObject({ id: ingressId, options: { showContent: true } });
+        const ingressFields = getObjectFields(ingressObj);
+        const ia          = BigInt(ingressFields['isd_as_id'] as string);
+        const ingressIfId = ingressFields['interface_id'] as number;
+        const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
+        const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
 
-      const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
-      const result = await executeTransaction(
-        state.client as Parameters<typeof executeTransaction>[0],
-        state.signer,
-        tx,
-      );
-      console.log("result");
-      console.log(result);
-      // The redeem() call creates a RedeemRequest object owned by the AS issuer
-      const redeemRequestObjectId = extractCreatedObjectId(
-        result,
-        getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
-      );
-      console.log(redeemRequestObjectId);
+        const egressObj = await state.client.getObject({ id: egressId, options: { showContent: true } });
+        const egressFields = getObjectFields(egressObj);
+        const egressIfId  = egressFields['interface_id'] as number;
 
-      // Wait for the AS to call deliver_reservation(), which deletes the RedeemRequest
-      // and emits ReservationDelivered with the encrypted keys
-      let encryptedReservation: Uint8Array;
+        // Public key management is TBD; hardcoded zeros for now
+        const publicKey = new Uint8Array(32);
+
+        const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
+        const result = await executeTransaction(
+          state.client as Parameters<typeof executeTransaction>[0],
+          state.signer,
+          tx,
+        );
+        console.log("result");
+        console.log(result);
+        // The redeem() call creates a RedeemRequest object owned by the AS issuer
+        const redeemRequestObjectId = extractCreatedObjectId(
+          result,
+          getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
+        );
+        console.log(redeemRequestObjectId);
+
+        // Wait for the AS to call deliver_reservation(), which deletes the RedeemRequest
+        // and emits ReservationDelivered with the encrypted keys
         const delivery = await state.deliveryListener.waitForDelivery(
           redeemRequestObjectId,
           state.packageId,
           state.config.redemption.timeoutSecs * 1000,
         );
-        encryptedReservation = delivery.encryptedReservation;
-        console.log(encryptedReservation);
-        const ak =  new TextDecoder().decode(encryptedReservation);
+        const ak = new TextDecoder().decode(delivery.encryptedReservation);
         console.log(ak);
+
+        insertReservation(state.db, {
+          resId:     delivery.resId,
+          ia,
+          ingressId: ingressIfId,
+          egressId:  egressIfId,
+          bw:        delivery.bwRounded,
+          startsAt,
+          stopsAt,
+          ak,
+        });
+
         return new RedeemAssetResponse({
-        ak,
-        resId: delivery.resId,
-        bwRounded: delivery.bwRounded,
-        bwDataplaneEncoding: delivery.bwDataplaneEncoding,
+          ak,
+          resId: delivery.resId,
+          bwRounded: delivery.bwRounded,
+          bwDataplaneEncoding: delivery.bwDataplaneEncoding,
         });
       } catch (err) {
         console.log(err);
@@ -282,13 +308,29 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         }
         throw err;
       }
-
-      
     },
 
-    fetchReservations(_req, _ctx) {
-
-      return new FetchReservationsResponse({ reservations: [new Reservation({resId: 1234n})]});
+    fetchReservations(req, _ctx) {
+      const filter: ReservationFilter = {};
+      if (req.ia        !== undefined) filter.ia        = req.ia;
+      if (req.ingressId !== undefined) filter.ingressId = req.ingressId;
+      if (req.egressId  !== undefined) filter.egressId  = req.egressId;
+      if (req.bw        !== undefined) filter.bw        = req.bw;
+      if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.toDate();
+      if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.toDate();
+      const rows = queryReservations(state.db, filter);
+      return new FetchReservationsResponse({
+        reservations: rows.map(r => new Reservation({
+          resId:     r.resId,
+          ia:        r.ia,
+          ingressId: r.ingressId,
+          egressId:  r.egressId,
+          bw:        r.bw,
+          startsAt:  Timestamp.fromDate(r.startsAt),
+          stopsAt:   Timestamp.fromDate(r.stopsAt),
+          ak:        r.ak,
+        })),
+      });
     },
 
     splitAsset(_req, _ctx) {

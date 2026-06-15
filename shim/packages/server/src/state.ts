@@ -1,4 +1,4 @@
-import type { SuiJsonRpcClient, Config, DeliveryListener } from '@sui-shim/core';
+import type { SuiJsonRpcClient, Config, DeliveryListener, SqliteDb } from '@sui-shim/core';
 import type { Keypair } from '@mysten/sui/cryptography';
 
 export interface AppState {
@@ -14,4 +14,5 @@ export interface AppState {
   interfaceObjects: Map<number, string>;
   deliveryListener: DeliveryListener;
   pendingRedemptions: Map<BigInt, string>;
+  db: SqliteDb;
 }

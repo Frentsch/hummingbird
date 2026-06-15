@@ -14,7 +14,12 @@ import {
   extractCreatedObjectId,
   getObjectType,
   saveConfig,
-  listingInterfaceId
+  listingInterfaceId,
+  DeliveryListener,
+  createSuiGrpcClient,
+  openReservationDb,
+  insertReservation,
+  getObjectFields,
 } from '@sui-shim/core';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
@@ -64,7 +69,7 @@ export function makeCallCommand(): Command {
       }else{
         throw new Error("Failed to create AS on chain. Check that the AS registry does not yet exist on chain");
       }
-      
+
       if(opts.setActive) {
         ctx.config.as.asRegistryId = registryId;
         ctx.config.as.asAuthCapId = asAuthCapId;
@@ -72,7 +77,7 @@ export function makeCallCommand(): Command {
         saveConfig(ctx.config, opts.config);
       }
 
-  
+
     }),
   );
 
@@ -90,7 +95,7 @@ export function makeCallCommand(): Command {
       const result = await runTx(ctx, buildRegisterSeller({ packageId: ctx.config.package.id, paymentAddress: addr}));
       const sellerToken = extractCreatedObjectId(result, getObjectType(ctx.config.package.id,"marketplace","SellerAuthToken"));
       console.log(`Created Seller Token at ${sellerToken} for Address ${addr}`);
-      
+
       if(opts.setActive){
         ctx.config.as.sellerAuthTokenId = sellerToken;
         saveConfig(ctx.config, opts.config);
@@ -221,7 +226,7 @@ export function makeCallCommand(): Command {
         const ctx = await makeCtx(opts.config);
         const listing = await ctx.client.getObject({ id: opts.listingId, options: { showContent: true } });
         const interfaceObjectId = listingInterfaceId(listing);
-        
+
         const result = await runTx(
           ctx,
           buildBuyAndTake({
@@ -244,14 +249,27 @@ export function makeCallCommand(): Command {
   call.addCommand(
     configOpt(
       new Command('redeem')
-        .description('Redeem ingress + egress assets and submit a public key')
+        .description('Redeem ingress + egress assets, wait for delivery, and store the reservation')
         .requiredOption('--ingress-asset-id <id>', 'Ingress HummingbirdAsset object ID')
         .requiredOption('--egress-asset-id <id>', 'Egress HummingbirdAsset object ID')
         .requiredOption('--public-key <hex>', 'Public key bytes as hex (0x-prefixed or plain)'),
     ).action(
       async (opts: { config: string; ingressAssetId: string; egressAssetId: string; publicKey: string }) => {
         const ctx = await makeCtx(opts.config);
-        await runTx(
+
+        // Fetch asset fields before buildRedeem wraps them into a RedeemRequest on-chain
+        const ingressObj = await ctx.client.getObject({ id: opts.ingressAssetId, options: { showContent: true } });
+        const ingressFields = getObjectFields(ingressObj);
+        const ia          = BigInt(ingressFields['isd_as_id'] as string);
+        const ingressIfId = ingressFields['interface_id'] as number;
+        const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
+        const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
+
+        const egressObj = await ctx.client.getObject({ id: opts.egressAssetId, options: { showContent: true } });
+        const egressFields = getObjectFields(egressObj);
+        const egressIfId  = egressFields['interface_id'] as number;
+
+        const result = await runTx(
           ctx,
           buildRedeem({
             packageId: ctx.config.package.id,
@@ -260,6 +278,41 @@ export function makeCallCommand(): Command {
             publicKey: hexToBytes(opts.publicKey),
           }),
         );
+
+        const redeemRequestObjectId = extractCreatedObjectId(
+          result,
+          getObjectType(ctx.config.package.id, 'hummingbird_asset', 'RedeemRequest'),
+        );
+        console.log(`RedeemRequest created: ${redeemRequestObjectId}`);
+        console.log('Waiting for AS to deliver reservation…');
+
+        const grpcClient = createSuiGrpcClient(ctx.config.network.name, ctx.config.network.grpcUrl);
+        const dl = new DeliveryListener(grpcClient);
+        const delivery = await dl.waitForDelivery(
+          redeemRequestObjectId,
+          ctx.config.package.id,
+          ctx.config.redemption.timeoutSecs * 1000,
+        );
+
+        const ak = new TextDecoder().decode(delivery.encryptedReservation);
+
+        const db = openReservationDb(ctx.config.db.path);
+        insertReservation(db, {
+          resId:     delivery.resId,
+          ia,
+          ingressId: ingressIfId,
+          egressId:  egressIfId,
+          bw:        delivery.bwRounded,
+          startsAt,
+          stopsAt,
+          ak,
+        });
+        db.close();
+
+        console.log(`✓ Reservation stored`);
+        console.log(`  res_id : ${delivery.resId}`);
+        console.log(`  bw     : ${delivery.bwRounded}`);
+        console.log(`  ak     : ${ak}`);
       },
     ),
   );
@@ -459,7 +512,7 @@ export function makeCallCommand(): Command {
         ].join(' | '));
       });
       console.log(separator);
-      
+
     }),
   );
 
@@ -511,7 +564,7 @@ export function makeCallCommand(): Command {
         const fields = content?.dataType === 'moveObject'
           ? (content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields
           : {} as Record<string, unknown>;
-          
+
         console.log([
           objectId.padEnd(COL.objectId),
           String(fields.ingress_asset ?? '?').padEnd(COL.ingressAsset),
@@ -521,9 +574,9 @@ export function makeCallCommand(): Command {
         ].join(' | '));
       });
       console.log(separator);
-      
+
     }),
   );
-   
+
   return call;
 }

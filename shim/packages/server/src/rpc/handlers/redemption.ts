@@ -2,7 +2,6 @@ import { ConnectError, type ServiceImpl } from '@connectrpc/connect';
 import type { RedemptionService as IRedemptionService } from '../gen/hummingbird/v1/redemption_connect.js';
 import { RedeemAssetFromASRequest } from '../gen/hummingbird/v1/redemption_pb.js';
 import { buildDeliverReservation, executeTransaction } from '@sui-shim/core';
-import { StatementSync } from 'node:sqlite';
 import type { AppState } from '../../state.js';
 import { BigIntToUID } from '../helpers.js';
 

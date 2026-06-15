@@ -12,6 +12,7 @@ import {
   DeliveryListener,
   PlaintextUnlocker,
   loadConfig,
+  openReservationDb,
 } from '@sui-shim/core';
 import type { RedeemEvent } from '@sui-shim/core';
 import type { AppState } from './state.js';
@@ -35,6 +36,7 @@ export async function startServer(configPath: string): Promise<void> {
 
   const grpcClient = createSuiGrpcClient(config.network.name, config.network.grpcUrl);
   const deliveryListener = new DeliveryListener(grpcClient);
+  const db = openReservationDb(config.db.path);
 
   const state: AppState = {
     config,
@@ -48,6 +50,7 @@ export async function startServer(configPath: string): Promise<void> {
     interfaceObjects: new Map(),
     deliveryListener,
     pendingRedemptions: new Map(),
+    db,
   };
 
   const myAddress = signer.getPublicKey().toSuiAddress();

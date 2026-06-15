@@ -4,6 +4,7 @@ import { makeDaemonCommand } from './commands/daemon.js';
 import { makeCallCommand } from './commands/call.js';
 import { makeCallersCommand } from './commands/callers.js';
 import { makeKeysCommand } from './commands/keys.js';
+import { createReservationsCommand } from './commands/reservations.js';
 
 const program = new Command('sui-shim')
   .description('Hummingbird Sui shim — daemon and tooling for AS operators')
@@ -13,6 +14,7 @@ program.addCommand(makeDaemonCommand());
 program.addCommand(makeCallCommand());
 program.addCommand(makeCallersCommand());
 program.addCommand(makeKeysCommand());
+program.addCommand(createReservationsCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error('Error:', err instanceof Error ? err.message : String(err));

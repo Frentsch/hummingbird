@@ -36,6 +36,9 @@ export const ConfigSchema = z.object({
   redemption: z.object({
     timeoutSecs: z.number().int().min(1).default(60),
   }).default({ timeoutSecs: 60 }),
+  db: z.object({
+    path: z.string(),
+  }).default({ path: './reservations.db' }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
