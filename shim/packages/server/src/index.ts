@@ -47,6 +47,7 @@ export async function startServer(configPath: string): Promise<void> {
     sellerAuthTokenId: config.as.sellerAuthTokenId ?? process.env['SHIM_SELLER_AUTH_TOKEN_ID'] ?? '',
     interfaceObjects: new Map(),
     deliveryListener,
+    pendingRedemptions: new Map(),
   };
 
   const myAddress = signer.getPublicKey().toSuiAddress();
@@ -58,8 +59,9 @@ export async function startServer(configPath: string): Promise<void> {
       bw: ev.bandwidth,
       startsAt: Timestamp.fromDate(new Date(Number(ev.startTime))),
       stopsAt: Timestamp.fromDate(new Date(Number(ev.expTime))),
-      requestId: ev.requestId,
+      requestId: ev.requestId.toString(),
     });
+    state.pendingRedemptions.set(ev.requestId, ev.requestObjectId);
     for (const enqueue of pendingRedeemRequests.values()) {
       enqueue(req);
     }

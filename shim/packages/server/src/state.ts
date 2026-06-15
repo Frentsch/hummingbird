@@ -13,4 +13,5 @@ export interface AppState {
   /** interface_id (u16) → on-chain object ID */
   interfaceObjects: Map<number, string>;
   deliveryListener: DeliveryListener;
+  pendingRedemptions: Map<BigInt, string>;
 }

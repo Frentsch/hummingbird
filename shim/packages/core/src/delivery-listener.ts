@@ -3,6 +3,9 @@ import type { SuiGrpcClient } from './sui-client.js';
 
 export interface DeliveryResult {
   encryptedReservation: Uint8Array;
+  resId: bigint,
+  bwRounded: bigint,
+  bwDataplaneEncoding: number,
 }
 
 export class DeliveryTimeoutError extends Error {
@@ -18,6 +21,9 @@ const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   redeem_request_id: bcs.Address,
   public_key: bcs.vector(bcs.u8()),
   encrypted_reservation: bcs.vector(bcs.u8()),
+  res_id: bcs.u64().transform({ input: (v: bigint) => v, output: (v) => BigInt(v) }), //per default bcs parses u64 to strings
+  bw_rounded: bcs.u64().transform({ input: (v: bigint) => v, output: (v) => BigInt(v) }),
+  bw_dataplane_encoding: bcs.u16(),
 });
 
 // ChangedObject_IdOperation.DELETED = 3 (from @mysten/sui grpc proto enum)
@@ -74,7 +80,7 @@ export class DeliveryListener {
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;
                 
-                let decoded: { redeem_request_id: string; encrypted_reservation: number[] };
+                let decoded: { redeem_request_id: string; encrypted_reservation: number[]; res_id: bigint, bw_rounded: bigint; bw_dataplane_encoding: number };
                 try {
                   const fullDecode = ReservationDeliveredBCS.parse(event.contents.value);
                   console.log(fullDecode);
@@ -88,7 +94,7 @@ export class DeliveryListener {
                 if (decoded.redeem_request_id.toLowerCase() !== normalizedId) continue;
 
                 clearTimeout(timer);
-                resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation) });
+                resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation), resId: decoded.res_id, bwRounded: decoded.bw_rounded, bwDataplaneEncoding: decoded.bw_dataplane_encoding });
                 return;
               }
             }

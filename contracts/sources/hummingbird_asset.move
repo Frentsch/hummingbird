@@ -58,8 +58,12 @@ module hummingbird::hummingbird_asset {
 
     struct ReservationDelivered has copy, drop {
         isd_as_id: u64,
+        redeem_request_id: ID,
         public_key: vector<u8>,
         encrypted_reservation: vector<u8>,
+        res_id: u64,
+        bw_rounded: u64,
+        bw_dataplane_encoding: u16,
     }
 
     // --- Getters ---
@@ -255,8 +259,12 @@ module hummingbird::hummingbird_asset {
     public entry fun deliver_reservation(
         req: RedeemRequest,
         encrypted_reservation: vector<u8>,
+        res_id: u64,
+        bw_rounded: u64,
+        bw_dataplane_encoding: u16,
         ctx: &mut TxContext,
     ) {
+        let redeem_request_id = object::id(&req);
         let RedeemRequest { id: wid, ingress_asset, egress_asset, public_key, buyer } = req;
         let isd_as_id = ingress_asset.isd_as_id;
         let interface_id = ingress_asset.interface_id;
@@ -275,7 +283,14 @@ module hummingbird::hummingbird_asset {
             bandwidth,
             encrypted_reservation: encrypted_reservation,
         };
-        event::emit(ReservationDelivered { isd_as_id, public_key, encrypted_reservation: reservation.encrypted_reservation });
+        event::emit(ReservationDelivered { 
+            isd_as_id, 
+            redeem_request_id, 
+            public_key, 
+            encrypted_reservation: reservation.encrypted_reservation,
+            res_id,
+            bw_rounded,
+            bw_dataplane_encoding });
         transfer::transfer(reservation, buyer);
     }
 

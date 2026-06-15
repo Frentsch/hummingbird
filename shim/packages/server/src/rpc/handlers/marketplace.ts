@@ -13,6 +13,7 @@ import {
   FetchReservationsResponse,
   SplitAssetResponse,
   CombineAssetResponse,
+  Reservation,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
 import { deriveObjectID } from '@mysten/sui/utils';
@@ -266,6 +267,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         );
         encryptedReservation = delivery.encryptedReservation;
         console.log(encryptedReservation);
+        const ak =  new TextDecoder().decode(encryptedReservation);
+        console.log(ak);
+        return new RedeemAssetResponse({
+        ak,
+        resId: delivery.resId,
+        bwRounded: delivery.bwRounded,
+        bwDataplaneEncoding: delivery.bwDataplaneEncoding,
+        });
       } catch (err) {
         console.log(err);
         if (err instanceof DeliveryTimeoutError) {
@@ -274,17 +283,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         throw err;
       }
 
-      return new RedeemAssetResponse({
-        ak: Array.from(encryptedReservation, (b) => b.toString(16).padStart(2, '0')).join(''),
-        resId: BigInt(req.ingressAssetId),
-        bwRounded: 0n,
-        bwDataplaneEncoding: 0,
-      });
+      
     },
 
     fetchReservations(_req, _ctx) {
 
-      return new FetchReservationsResponse({ reservations: [] });
+      return new FetchReservationsResponse({ reservations: [new Reservation({resId: 1234n})]});
     },
 
     splitAsset(_req, _ctx) {

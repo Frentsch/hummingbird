@@ -38,3 +38,7 @@ export function ListingToQueryAsset(obj: any): Asset {
     const price = BigInt(fields['price'] as string);
     return assetFromFields(objectId, assetFields, price);
 }
+
+export function BigIntToUID(id: BigInt){
+    return '0x' + id.toString(16).padStart(64, '0');
+}

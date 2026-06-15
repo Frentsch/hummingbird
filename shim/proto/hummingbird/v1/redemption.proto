@@ -31,14 +31,14 @@ message RedeemAssetFromASRequest {
     google.protobuf.Timestamp starts_at = 4;
     google.protobuf.Timestamp stops_at = 5;
     // to match request with response
-    uint64 request_id = 6;
+    string request_id = 6;
 }
 
 message RedeemAssetFromASResponse {
     ReservationInfo res_info = 1;
     string ak = 2;
     // to match request with response
-    uint64 request_id = 3;
+    string request_id = 3;
 }
 
 message ReservationInfo {

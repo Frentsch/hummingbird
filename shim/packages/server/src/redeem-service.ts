@@ -25,6 +25,7 @@ export async function startRedeemService(grpcPort: number): Promise<void> {
         deliverRequest = resolve;
       });
       if (req === null) return;
+      console.log(`[RedeemService] sending response for ${req.requestId}`)
       yield new RedeemAssetFromASResponse({
         resInfo: new ReservationInfo({
           resId: resId++,

@@ -11,6 +11,9 @@ export interface DeliverReservationParams {
    * (provided in RedeemAssetFromASRequest.public_key from the on-chain RedeemRequest).
    */
   encryptedReservation: Uint8Array;
+  resId: bigint,
+  bwRounded: bigint,
+  bwDataplaneEncoding: number,
 }
 
 /**
@@ -25,6 +28,9 @@ export function buildDeliverReservation(params: DeliverReservationParams): Trans
     arguments: [
       tx.object(params.redeemRequestId),
       tx.pure.vector('u8', Array.from(params.encryptedReservation)),
+      tx.pure.u64(params.resId),
+      tx.pure.u64(params.bwRounded),
+      tx.pure.u16(params.bwDataplaneEncoding),
     ],
   });
   return tx;

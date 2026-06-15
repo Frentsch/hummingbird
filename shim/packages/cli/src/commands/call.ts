@@ -270,9 +270,12 @@ export function makeCallCommand(): Command {
       new Command('deliver-reservation')
         .description('Deliver an encrypted reservation to a pending redeem request')
         .requiredOption('--redeem-request-id <id>', 'RedeemRequest object ID')
-        .requiredOption('--encrypted-reservation <hex>', 'Encrypted reservation bytes as hex'),
+        .requiredOption('--encrypted-reservation <hex>', 'Encrypted reservation bytes as hex')
+        .requiredOption('--res-id <id>', 'Per AS Reservation Id')
+        .requiredOption('--bw-rounded <num>', 'Rounded BW')
+        .requiredOption('--bw-dataplane-encoding <enc>', 'Dataplane representation'),
     ).action(
-      async (opts: { config: string; redeemRequestId: string; encryptedReservation: string }) => {
+      async (opts: { config: string; redeemRequestId: string; encryptedReservation: string; resId: bigint; bwRounded: bigint; bwDataplanEncoding: number; }) => {
         const ctx = await makeCtx(opts.config);
         await runTx(
           ctx,
@@ -280,6 +283,9 @@ export function makeCallCommand(): Command {
             packageId: ctx.config.package.id,
             redeemRequestId: opts.redeemRequestId,
             encryptedReservation: hexToBytes(opts.encryptedReservation),
+            resId: opts.resId,
+            bwRounded: opts.bwRounded,
+            bwDataplaneEncoding: opts.bwDataplanEncoding,
           }),
         );
       },
