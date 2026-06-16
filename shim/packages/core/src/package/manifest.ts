@@ -1,5 +1,5 @@
 /** Default coin type for marketplace operations. */
-export const DEFAULT_COIN_TYPE = '0x2::sui::SUI';
+export const DEFAULT_COIN_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
 
 /** The networks the daemon can target. RPC URLs resolved by createSuiClient(). */
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';

@@ -2,7 +2,7 @@ export * from './errors.js';
 export * from './keystore/index.js';
 export * from './package/index.js';
 export { createSuiClient, createSuiGrpcClient } from './sui-client.js';
-export type { SuiJsonRpcClient, SuiGrpcClient } from './sui-client.js';
+export type { SuiGraphQLClient, SuiGrpcClient } from './sui-client.js';
 export { executeTransaction, dryRunTransaction } from './execute.js';
 export type { TxResult } from './execute.js';
 export { EventListener } from './event-listener.js';

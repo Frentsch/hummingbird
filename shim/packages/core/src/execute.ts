@@ -1,16 +1,18 @@
 import type { Keypair } from '@mysten/sui/cryptography';
 import type { Transaction } from '@mysten/sui/transactions';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import { SuiTransactionError } from './errors.js';
-import type { SuiJsonRpcClient } from './sui-client.js';
+import type { SuiGraphQLClient } from './sui-client.js';
 
 export interface TxResult {
   /** Transaction digest. */
   digest: string;
-  /** Raw effects (always present — showEffects is forced true). */
-  effects: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['effects']>;
-  /** Object changes (always present — showObjectChanges is forced true). */
-  objectChanges: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['objectChanges']>;
-  balanceChanges: NonNullable<Awaited<ReturnType<SuiJsonRpcClient['signAndExecuteTransaction']>>['balanceChanges']>;
+  /** Full execution effects. */
+  effects: SuiClientTypes.TransactionEffects;
+  /** Map of objectId → Move type string for all objects touched by the transaction. */
+  objectTypes: Record<string, string>;
+  /** Balance changes caused by the transaction. */
+  balanceChanges: SuiClientTypes.BalanceChange[];
 }
 
 /**
@@ -18,37 +20,43 @@ export interface TxResult {
  * Throws SuiTransactionError if the chain reports a non-success status.
  */
 export async function executeTransaction(
-  client: SuiJsonRpcClient,
+  client: SuiGraphQLClient,
   signer: Keypair,
   tx: Transaction,
 ): Promise<TxResult> {
-  const response = await client.signAndExecuteTransaction({
+  const result = await client.signAndExecuteTransaction({
     signer,
     transaction: tx,
-    options: {
-      showEffects: true,
-      showEvents: true,
-      showObjectChanges: true,
-      showBalanceChanges: true
+    include: {
+      effects: true,
+      balanceChanges: true,
+      objectTypes: true,
     },
   });
-  
-  const effects = response.effects;
+
+  const txn = result.$kind === 'Transaction' ? result.Transaction : result.FailedTransaction;
+
+  if (!txn.status.success) {
+    throw new SuiTransactionError(
+      `Transaction failed: ${txn.status.error?.message ?? 'unknown error'}`,
+      txn.digest,
+    );
+  }
+
+  const effects = txn.effects;
   if (!effects) {
     throw new SuiTransactionError(
       'Transaction executed but no effects returned',
-      response.digest,
+      txn.digest,
     );
   }
 
-  if (effects.status.status !== 'success') {
-    throw new SuiTransactionError(
-      `Transaction failed: ${effects.status.error ?? 'unknown error'}`,
-      response.digest,
-    );
-  }
-
-  return { digest: response.digest, effects, objectChanges: response.objectChanges ?? [], balanceChanges: response.balanceChanges ?? []};
+  return {
+    digest: txn.digest,
+    effects,
+    objectTypes: txn.objectTypes ?? {},
+    balanceChanges: txn.balanceChanges ?? [],
+  };
 }
 
 /**
@@ -57,19 +65,27 @@ export async function executeTransaction(
  * Returns effects from simulation; throws SuiTransactionError on simulated failure.
  */
 export async function dryRunTransaction(
-  client: SuiJsonRpcClient,
+  client: SuiGraphQLClient,
   signer: Keypair,
   tx: Transaction,
-): Promise<{ effects: Awaited<ReturnType<SuiJsonRpcClient['dryRunTransactionBlock']>>['effects'] }> {
+): Promise<{ effects: SuiClientTypes.TransactionEffects }> {
   tx.setSenderIfNotSet(signer.toSuiAddress());
-  const txBytes = await tx.build({ client });
-  const result = await client.dryRunTransactionBlock({ transactionBlock: txBytes });
+  const result = await client.simulateTransaction({
+    transaction: tx,
+    include: { effects: true },
+  });
 
-  if (result.effects.status.status !== 'success') {
+  const txn = result.$kind === 'Transaction' ? result.Transaction : result.FailedTransaction;
+
+  if (!txn.status.success) {
     throw new SuiTransactionError(
-      `Dry-run failed: ${result.effects.status.error ?? 'unknown error'}`,
+      `Dry-run failed: ${txn.status.error?.message ?? 'unknown error'}`,
     );
   }
 
-  return { effects: result.effects };
+  if (!txn.effects) {
+    throw new SuiTransactionError('Simulation returned no effects');
+  }
+
+  return { effects: txn.effects };
 }

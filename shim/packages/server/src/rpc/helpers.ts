@@ -20,25 +20,28 @@ function assetFromFields(objectId: string, assetFields: Record<string, unknown>,
     });
 }
 
-/** Map a raw SuiObjectResponse for a HummingbirdAsset (owned) to an RPC Asset. */
-export function SuiToRpcAsset(obj: any): Asset {
-    const objectId = obj.data!.objectId as string;
-    const fields = (obj.data!.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    return assetFromFields(objectId, fields, 0n);
+/**
+ * Map a GraphQL object (from getObject/listOwnedObjects with json: true) for
+ * a HummingbirdAsset to an RPC Asset.
+ * GraphQL JSON: structs are plain objects, no `fields` wrapper.
+ */
+export function SuiToRpcAsset(obj: { objectId: string; json: Record<string, unknown> | null }): Asset {
+    const fields = obj.json ?? {};
+    return assetFromFields(obj.objectId, fields, 0n);
 }
 
-
-
-/** Map a raw SuiObjectResponse for an AssetListing<COIN> (marketplace) to an RPC Asset.
- *  The listing's object ID is used as assetId so buyers can reference it in BuyAssets. */
-export function ListingToQueryAsset(obj: any): Asset {
-    const objectId = obj.data!.objectId as string;
-    const fields = (obj.data!.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    const assetFields = (fields['asset'] as { fields: Record<string, unknown> }).fields;
+/**
+ * Map a GraphQL object for an AssetListing<COIN> to an RPC Asset.
+ * GraphQL JSON: `asset` is a plain struct object (no `fields` wrapper).
+ * UID values are canonical address strings.
+ */
+export function ListingToQueryAsset(obj: { objectId: string; json: Record<string, unknown> | null }): Asset {
+    const fields = obj.json ?? {};
+    const assetFields = fields['asset'] as Record<string, unknown>;
     const price = BigInt(fields['price'] as string);
-    return assetFromFields(objectId, assetFields, price);
+    return assetFromFields(obj.objectId, assetFields, price);
 }
 
-export function BigIntToUID(id: BigInt){
+export function BigIntToUID(id: BigInt) {
     return '0x' + id.toString(16).padStart(64, '0');
 }

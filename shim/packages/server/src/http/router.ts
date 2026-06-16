@@ -204,12 +204,12 @@ export function createHttpRouter(state: AppState): Hono {
       const txBytes = fromBase64((body as { txBytes: string }).txBytes);
       const tx = Transaction.from(txBytes);
       const result = await executeTransaction(
-        state.client as Parameters<typeof executeTransaction>[0],
+        state.client,
         state.signer,
         tx,
       );
       console.log({result});
-      return c.json({ digest: result.digest, status: result.effects.status.status, effects: result.effects });
+      return c.json({ digest: result.digest, status: result.effects.status.success ? 'success' : 'failure', effects: result.effects });
     } catch (err) {
       return c.json({ error: String(err) }, 500);
     }

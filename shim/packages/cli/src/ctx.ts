@@ -6,12 +6,12 @@ import {
   executeTransaction,
   loadConfig,
 } from '@sui-shim/core';
-import type { SuiJsonRpcClient, TxResult, Config } from '@sui-shim/core';
+import type { SuiGraphQLClient, TxResult, Config } from '@sui-shim/core';
 import type { Transaction } from '@mysten/sui/transactions';
 import type { Keypair } from '@mysten/sui/cryptography';
 
 export interface CliCtx {
-  client: SuiJsonRpcClient;
+  client: SuiGraphQLClient;
   signer: Keypair;
   config: Config;
   keypairs: Array<Keypair>;
@@ -27,11 +27,11 @@ export async function makeCtx(configPath: string): Promise<CliCtx> {
 
 export async function runTx(ctx: CliCtx, tx: Transaction): Promise<TxResult> {
   const result = await executeTransaction(
-    ctx.client as Parameters<typeof executeTransaction>[0],
+    ctx.client,
     ctx.signer,
     tx,
   );
   console.log(`✓ digest: ${result.digest}`);
-  console.log(`  status: ${result.effects.status.status}`);
+  console.log(`  status: ${result.effects.status.success ? 'success' : 'failure'}`);
   return result;
 }

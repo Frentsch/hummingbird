@@ -1,94 +1,85 @@
-import { deriveObjectID, fromBase64 } from '@mysten/sui/utils';
-import type { SuiJsonRpcClient } from '../sui-client.js';
-import { bcs } from '@mysten/sui/bcs';
+import { deriveObjectID } from '@mysten/sui/utils';
+import type { SuiClientTypes } from '@mysten/sui/client';
+import type { SuiGraphQLClient } from '../sui-client.js';
 
-export async function getAllListingsOf(interfaceId: string, client: SuiJsonRpcClient): Promise<any>{
-    // Fetch the Interface object to locate the listings ObjectBag
-    const interfaceObj = await client.getObject({
-        id: interfaceId,
-        options: { showContent: true },
-    });
-    if (!interfaceObj.data?.content || interfaceObj.data.content.dataType !== 'moveObject') {
-        return [];
-    }
-    // Extract the ObjectBag ID from Interface.listings
-    const interfaceFields = (interfaceObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    const bagId = ((interfaceFields['listings'] as { fields: { id: { id: string } } }).fields.id.id);
-    
-    // Paginate through all dynamic fields of the ObjectBag to collect listing IDs
+// In the GraphQL JSON representation:
+//   - Structs are plain JSON objects (no `fields` wrapper)
+//   - UID / ID values are canonical address strings (not { id: { id: "0x..." } })
+//   - u64 values are JSON strings; u8/u16/u32 are JSON numbers
+
+export async function getAllListingsOf(interfaceId: string, client: SuiGraphQLClient): Promise<any[]> {
+    const interfaceObj = await client.getObject({ objectId: interfaceId, include: { json: true } });
+    const interfaceJson = interfaceObj.object.json;
+    if (!interfaceJson) return [];
+
+    // listings is a Bag { id: UID, size: u64 }; UID serialises as a canonical address string.
+    const listingsBag = interfaceJson['listings'] as { id: string } | undefined;
+    const bagId = listingsBag?.id;
+    if (!bagId) return [];
+
     const listingIds: string[] = [];
     let cursor: string | null = null;
-    do {
-        const page = await client.getDynamicFields({ parentId: bagId, cursor });
-        listingIds.push(...page.data.map(f => f.objectId));
-        cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
-    } while (cursor !== null);
-
-    if (listingIds.length === 0) {
-        [];
+    while (true) {
+        const result: SuiClientTypes.ListDynamicFieldsResponse = await client.listDynamicFields({ parentId: bagId, cursor });
+        listingIds.push(...result.dynamicFields.map(f =>
+            f.$kind === 'DynamicObject' ? f.childId : f.fieldId
+        ));
+        if (!result.hasNextPage) break;
+        cursor = result.cursor;
     }
 
-    // Batch-fetch all listing objects with their content
-    const listingObjs = await client.multiGetObjects({
-        ids: listingIds,
-        options: { showContent: true },
+    if (listingIds.length === 0) return [];
+
+    const { objects } = await client.getObjects({
+        objectIds: listingIds,
+        include: { json: true },
     });
-    return listingObjs;
+    return objects;
 }
 
-export async function getAllInterfacesOf(asRegsitryid: string, client: SuiJsonRpcClient): Promise<string[]>{
+export async function getAllInterfacesOf(asRegistryId: string, client: SuiGraphQLClient): Promise<string[]> {
+    const registryObj = await client.getObject({ objectId: asRegistryId, include: { json: true } });
+    const registryJson = registryObj.object.json;
+    if (!registryJson) return [];
 
-    const registryObj = await client.getObject({
-        id: asRegsitryid,
-        options: { showContent: true },
-    });
+    const interfacesBag = registryJson['interfaces'] as { id: string } | undefined;
+    const bagId = interfacesBag?.id;
+    if (!bagId) return [];
 
-    if (!registryObj.data?.content || registryObj.data.content.dataType !== 'moveObject') {
-        return [];
-    }
-    // Extract the ObjectBag ID from Interface.listings
-    const registryFields = (registryObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-
-    const bagId = ((registryFields['interfaces'] as { fields: { id: { id: string } } }).fields.id.id);
- 
-    // Paginate through all dynamic fields of the Table to collect listing IDs
     const interfaceIds: string[] = [];
     let cursor: string | null = null;
-    do {
-        const page = await client.getDynamicFields({ parentId: bagId, cursor });
-        interfaceIds.push(...page.data.map(f => {
-            const iid = bcs.U16.fromBase64(f.bcsName);
-            const addr = deriveObjectID(asRegsitryid,'u16' ,fromBase64(f.bcsName));
-            return addr;
-            }
-        ));
-        cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
-    } while (cursor !== null);
+    while (true) {
+        const result: SuiClientTypes.ListDynamicFieldsResponse = await client.listDynamicFields({ parentId: bagId, cursor });
+        interfaceIds.push(...result.dynamicFields.map(f => {
+            // Key is a u16; name.bcs is a raw Uint8Array (BCS-encoded u16)
+            return deriveObjectID(asRegistryId, 'u16', f.name.bcs);
+        }));
+        if (!result.hasNextPage) break;
+        cursor = result.cursor;
+    }
+
     return interfaceIds;
 }
 
-export async function getAllRegistries(globalRegistryId: string, client: SuiJsonRpcClient): Promise<string[]>{
-    const registryObj = await client.getObject({
-        id: globalRegistryId,
-        options: { showContent: true },
-    });
+export async function getAllRegistries(globalRegistryId: string, client: SuiGraphQLClient): Promise<string[]> {
+    const registryObj = await client.getObject({ objectId: globalRegistryId, include: { json: true } });
+    const registryJson = registryObj.object.json;
+    if (!registryJson) return [];
 
-    if (!registryObj.data?.content || registryObj.data.content.dataType !== 'moveObject') {
-        return [];
-    }
-    // Extract the ObjectBag ID from Interface.listings
-    const registryFields = (registryObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-  
-    const bagId = ((registryFields['as_registries'] as { fields: { id: { id: string } } }).fields.id.id);
+    const asRegistriesBag = registryJson['as_registries'] as { id: string } | undefined;
+    const bagId = asRegistriesBag?.id;
+    if (!bagId) return [];
 
-    // Paginate through all dynamic fields of the ObjectBag to collect listing IDs
     const registryIds: string[] = [];
     let cursor: string | null = null;
-    do {
-        const page = await client.getDynamicFields({ parentId: bagId, cursor });
-        registryIds.push(...page.data.map(f => deriveObjectID(globalRegistryId,'u64' ,fromBase64(f.bcsName))));
-        cursor = page.hasNextPage ? (page.nextCursor ?? null) : null;
-    } while (cursor !== null);
+    while (true) {
+        const result: SuiClientTypes.ListDynamicFieldsResponse = await client.listDynamicFields({ parentId: bagId, cursor });
+        registryIds.push(...result.dynamicFields.map(f =>
+            deriveObjectID(globalRegistryId, 'u64', f.name.bcs)
+        ));
+        if (!result.hasNextPage) break;
+        cursor = result.cursor;
+    }
 
     return registryIds;
 }

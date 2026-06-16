@@ -1,31 +1,33 @@
 import type { TxResult } from "./execute.js";
 import { SuiTransactionError } from "./errors.js";
-import { string } from "zod";
-
 
 export function extractCreatedObjectId(result: TxResult, objectType: string): string {
-    console.log(result.objectChanges);
-    const change = result.objectChanges.find(
-        (c): c is Extract<(typeof result.objectChanges)[number], { type: 'created' }> =>
-            c.type === 'created' && c.objectType === objectType
+    const match = result.effects.changedObjects.find(
+        c => c.idOperation === 'Created' && result.objectTypes[c.objectId] === objectType,
     );
-    if (!change) throw new SuiTransactionError(`No created object of type ${objectType} found`);
-    return change.objectId;
+    if (!match) throw new SuiTransactionError(`No created object of type ${objectType} found`);
+    return match.objectId;
 }
 
-
-export function getObjectType(packageId: string, module: string, type: string) : string{
-    return packageId.concat("::", module,"::", type);
+export function getObjectType(packageId: string, module: string, type: string): string {
+    return packageId.concat("::", module, "::", type);
 }
 
-/** Extract the Interface object ID stored in an AssetListing's `interface` field. */
-export function listingInterfaceId(obj: any): string {
-    const fields = (obj.data!.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-    console.log(fields);
-    return fields['interface'] as string;
+/**
+ * Extract the Interface object ID stored in an AssetListing's `interface` field.
+ * Expects the result of getObject({ ..., include: { json: true } }).
+ */
+export function listingInterfaceId(obj: { object: { json: Record<string, unknown> | null } }): string {
+    const json = obj.object.json;
+    if (!json) throw new SuiTransactionError('Object not found or has no json content');
+    return json['interface'] as string;
 }
 
-export function getObjectFields(obj:any): Record<string, unknown> {
-    return (obj.data!.content as {dataType: 'moveObject'; fields: Record<string, unknown>}).fields;
+/**
+ * Return the top-level Move struct fields as a plain record.
+ * Expects the result of getObject({ ..., include: { json: true } }).
+ * In the GraphQL API, `json` is already the flat struct — no `fields` wrapper.
+ */
+export function getObjectFields(obj: { object: { json: Record<string, unknown> | null } }): Record<string, unknown> {
+    return obj.object.json ?? {};
 }
-

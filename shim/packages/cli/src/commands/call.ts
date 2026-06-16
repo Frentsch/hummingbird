@@ -21,11 +21,11 @@ import {
   insertReservation,
   getObjectFields,
 } from '@sui-shim/core';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import { makeCtx, runTx } from '../ctx.js';
 import { getDefaultAddress } from './keys.js';
-import type { SuiObjectResponse } from '@mysten/sui/jsonRpc';
 
 function configOpt(cmd: Command): Command {
   return cmd.option('-c, --config <path>', 'Path to shim.toml config file', 'shim.toml');
@@ -76,8 +76,6 @@ export function makeCallCommand(): Command {
         ctx.config.as.interfaces = [];
         saveConfig(ctx.config, opts.config);
       }
-
-
     }),
   );
 
@@ -90,7 +88,6 @@ export function makeCallCommand(): Command {
         .option('--set-active'),
     ).action(async (opts: { config: string; paymentAddress: string; setActive: boolean}) => {
       const ctx = await makeCtx(opts.config);
-      //resolve default address
       const addr = opts.paymentAddress ?? getDefaultAddress(ctx);
       const result = await runTx(ctx, buildRegisterSeller({ packageId: ctx.config.package.id, paymentAddress: addr}));
       const sellerToken = extractCreatedObjectId(result, getObjectType(ctx.config.package.id,"marketplace","SellerAuthToken"));
@@ -103,7 +100,7 @@ export function makeCallCommand(): Command {
     }),
   );
 
-  // create-interface  (creates an Interface object on-chain)
+  // create-interface
   call.addCommand(
     coinTypeOpt(
       configOpt(
@@ -182,8 +179,8 @@ export function makeCallCommand(): Command {
 
         // Fetch interface object to get isd_as_id and interface_id.
         const interfaceObj = await ctx.client.getObject({
-          id: interfaceObjectId,
-          options: { showContent: true },
+          objectId: interfaceObjectId,
+          include: { json: true },
         });
         const interfaceFields = getObjectFields(interfaceObj);
         const isdAsId = BigInt(interfaceFields.isd_as_id as string);
@@ -210,6 +207,7 @@ export function makeCallCommand(): Command {
             coinType: opts.coinType,
           }),
         );
+        console.log(result);
         console.log(`Successfully published listing at ${extractCreatedObjectId(result, getObjectType(ctx.config.package.id, "marketplace", `AssetListing<${opts.coinType.toString()}>`))}`)
       },
     ),
@@ -241,7 +239,7 @@ export function makeCallCommand(): Command {
         coinType: string;
       }) => {
         const ctx = await makeCtx(opts.config);
-        const listing = await ctx.client.getObject({ id: opts.listingId, options: { showContent: true } });
+        const listing = await ctx.client.getObject({ objectId: opts.listingId, include: { json: true } });
         const interfaceObjectId = listingInterfaceId(listing);
 
         const result = await runTx(
@@ -274,15 +272,14 @@ export function makeCallCommand(): Command {
       async (opts: { config: string; ingressAssetId: string; egressAssetId: string; publicKey: string }) => {
         const ctx = await makeCtx(opts.config);
 
-        // Fetch asset fields before buildRedeem wraps them into a RedeemRequest on-chain
-        const ingressObj = await ctx.client.getObject({ id: opts.ingressAssetId, options: { showContent: true } });
+        const ingressObj = await ctx.client.getObject({ objectId: opts.ingressAssetId, include: { json: true } });
         const ingressFields = getObjectFields(ingressObj);
         const ia          = BigInt(ingressFields['isd_as_id'] as string);
         const ingressIfId = ingressFields['interface_id'] as number;
         const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
         const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
 
-        const egressObj = await ctx.client.getObject({ id: opts.egressAssetId, options: { showContent: true } });
+        const egressObj = await ctx.client.getObject({ objectId: opts.egressAssetId, include: { json: true } });
         const egressFields = getObjectFields(egressObj);
         const egressIfId  = egressFields['interface_id'] as number;
 
@@ -407,7 +404,6 @@ export function makeCallCommand(): Command {
       const ctx = await makeCtx(opts.config);
       const globalRegistryId = resolve(undefined, ctx.config.package?.globalRegistryId, 'global-registry-id');
 
-      // Derive AsRegistry from GlobalRegistry + isdAsId
       const asRegistryId = deriveObjectID(
         globalRegistryId,
         'u64',
@@ -415,7 +411,6 @@ export function makeCallCommand(): Command {
       );
       console.log(`[debug] asRegistryId: ${asRegistryId}`);
 
-      // Derive Interface from AsRegistry + interfaceId
       const interfaceObjId = deriveObjectID(
         asRegistryId,
         'u16',
@@ -423,52 +418,39 @@ export function makeCallCommand(): Command {
       );
       console.log(`Interface: ${interfaceObjId}`);
 
-      // Fetch the Interface object to locate the listings ObjectBag
-      const interfaceObj = await ctx.client.getObject({
-        id: interfaceObjId,
-        options: { showContent: true },
-      });
-
-      if (!interfaceObj.data?.content || interfaceObj.data.content.dataType !== 'moveObject') {
+      // GraphQL JSON: Bag { id: UID } → `id` is a canonical address string.
+      const interfaceObj = await ctx.client.getObject({ objectId: interfaceObjId, include: { json: true } });
+      const ifaceJson = interfaceObj.object.json;
+      if (!ifaceJson) {
         throw new Error(`Interface object not found at derived ID ${interfaceObjId}`);
       }
 
-      // Extract the ObjectBag ID from the Interface's `listings` field
-      const fields = (interfaceObj.data.content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields;
-      const listingsBag = fields.listings as { fields: { id: { id: string } } } | undefined;
-      const bagId = listingsBag?.fields?.id?.id;
+      const bagId = (ifaceJson['listings'] as { id: string } | undefined)?.id;
       if (!bagId) {
-        throw new Error(`Could not locate listings bag in interface. Raw fields:\n${JSON.stringify(fields, null, 2)}`);
+        throw new Error(`Could not locate listings bag in interface. Raw json:\n${JSON.stringify(ifaceJson, null, 2)}`);
       }
 
-      // Enumerate all listings from the ObjectBag
-      let cursor: string | null | undefined;
+      let cursor: string | null = null;
       let total = 0;
-      do {
-        const page = await ctx.client.getDynamicFields({ parentId: bagId, cursor: cursor ?? undefined });
-        for (const entry of page.data) {
+      while (true) {
+        const page: SuiClientTypes.ListDynamicFieldsResponse = await ctx.client.listDynamicFields({ parentId: bagId, cursor });
+        for (const entry of page.dynamicFields) {
           total++;
-          const listingObj = await ctx.client.getObject({
-            id: entry.objectId,
-            options: { showContent: true },
-          });
-          const listingFields =
-            listingObj.data?.content?.dataType === 'moveObject'
-              ? (listingObj.data.content as { dataType: 'moveObject'; fields: unknown }).fields
-              : listingObj.data?.content;
-          console.log(`\nListing ${entry.objectId} (key: ${JSON.stringify(entry.name.value)}):`);
-          console.log(JSON.stringify(listingFields, null, 2));
+          const objectId = entry.$kind === 'DynamicObject' ? entry.childId : entry.fieldId;
+          const listingObj = await ctx.client.getObject({ objectId, include: { json: true } });
+          console.log(`\nListing ${objectId}:`);
+          console.log(JSON.stringify(listingObj.object.json, null, 2));
         }
-        cursor = page.nextCursor;
         if (!page.hasNextPage) break;
-      } while (true);
+        cursor = page.cursor;
+      }
 
       if (total === 0) console.log('No listings found.');
       else console.log(`\nTotal: ${total} listing(s).`);
     }),
   );
 
-  //owned-listings
+  // owned-assets
   call.addCommand(
     configOpt(
       new Command('owned-assets')
@@ -476,22 +458,13 @@ export function makeCallCommand(): Command {
     ).action(async (opts: { config: string; }) => {
       const ctx = await makeCtx(opts.config);
 
-      const result = await ctx.client.getOwnedObjects({
+      const result = await ctx.client.listOwnedObjects({
         owner: getDefaultAddress(ctx),
-        filter: {
-          StructType: getObjectType(ctx.config.package.id, "hummingbird_asset", "HummingbirdAsset")
-        },
-        options: {
-            showType: true,
-            showContent: true,
-        },
+        type: getObjectType(ctx.config.package.id, "hummingbird_asset", "HummingbirdAsset"),
+        include: { json: true },
       });
 
-
-      if (!result.data) {
-        throw new Error(`Failed to fetch objects`);
-      }
-      if(result.data.length==0){
+      if (result.objects.length === 0) {
         console.log("No objects found");
         return;
       }
@@ -511,15 +484,11 @@ export function makeCallCommand(): Command {
       console.log(header);
       console.log(separator);
 
-      result.data.forEach((object) => {
-        const objectId = object.data?.objectId ?? '?';
-        const content = object.data?.content;
-        const fields = content?.dataType === 'moveObject'
-          ? (content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields
-          : {} as Record<string, unknown>;
+      result.objects.forEach((object) => {
+        const fields = object.json as Record<string, unknown> ?? {};
         const ifaceType = fields.interface_type === 0 || fields.interface_type === '0' ? 'ingress' : 'egress';
         console.log([
-          objectId.padEnd(COL.objectId),
+          object.objectId.padEnd(COL.objectId),
           String(fields.isd_as_id ?? '?').padEnd(COL.isdAsId),
           String(fields.interface_id ?? '?').padEnd(COL.ifaceId),
           ifaceType.padEnd(COL.ifaceType),
@@ -529,12 +498,10 @@ export function makeCallCommand(): Command {
         ].join(' | '));
       });
       console.log(separator);
-
     }),
   );
 
-
-  //pending-requests
+  // redeem-requests
   call.addCommand(
     configOpt(
       new Command('redeem-requests')
@@ -542,22 +509,13 @@ export function makeCallCommand(): Command {
     ).action(async (opts: { config: string; }) => {
       const ctx = await makeCtx(opts.config);
 
-      const result = await ctx.client.getOwnedObjects({
+      const result = await ctx.client.listOwnedObjects({
         owner: getDefaultAddress(ctx),
-        filter: {
-          StructType: getObjectType(ctx.config.package.id, "hummingbird_asset", "RedeemRequest")
-        },
-        options: {
-            showType: true,
-            showContent: true,
-        },
+        type: getObjectType(ctx.config.package.id, "hummingbird_asset", "RedeemRequest"),
+        include: { json: true },
       });
 
-
-      if (!result.data) {
-        throw new Error(`Failed to fetch objects`);
-      }
-      if(result.data.length==0){
+      if (result.objects.length === 0) {
         console.log("No objects found");
         return;
       }
@@ -575,15 +533,10 @@ export function makeCallCommand(): Command {
       console.log(header);
       console.log(separator);
 
-      result.data.forEach((object) => {
-        const objectId = object.data?.objectId ?? '?';
-        const content = object.data?.content;
-        const fields = content?.dataType === 'moveObject'
-          ? (content as { dataType: 'moveObject'; fields: Record<string, unknown> }).fields
-          : {} as Record<string, unknown>;
-
+      result.objects.forEach((object) => {
+        const fields = object.json as Record<string, unknown> ?? {};
         console.log([
-          objectId.padEnd(COL.objectId),
+          object.objectId.padEnd(COL.objectId),
           String(fields.ingress_asset ?? '?').padEnd(COL.ingressAsset),
           String(fields.egress_asset ?? '?').padEnd(COL.egressAsset),
           String(fields.public_key ?? '?').padEnd(COL.publicKey),
@@ -591,7 +544,6 @@ export function makeCallCommand(): Command {
         ].join(' | '));
       });
       console.log(separator);
-
     }),
   );
 

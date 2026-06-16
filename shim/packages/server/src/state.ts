@@ -1,9 +1,9 @@
-import type { SuiJsonRpcClient, Config, DeliveryListener, SqliteDb } from '@sui-shim/core';
+import type { SuiGraphQLClient, Config, DeliveryListener, SqliteDb } from '@sui-shim/core';
 import type { Keypair } from '@mysten/sui/cryptography';
 
 export interface AppState {
   config: Config;
-  client: SuiJsonRpcClient;
+  client: SuiGraphQLClient;
   signer: Keypair;
   packageId: string;
   globalRegistryId: string;

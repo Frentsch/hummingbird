@@ -59,7 +59,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         throw new ConnectError('At least one of if_id_ingress or if_id_egress must be set', Code.InvalidArgument);
       }
 
-      // Resolve the interface object ID from state
       const ifId = req.ifIdIngress ?? req.ifIdEgress!;
       const interfaceObjectId = state.interfaceObjects.get(ifId);
       if (!interfaceObjectId) {
@@ -69,10 +68,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const startMs = req.startAt ? Number(req.startAt.seconds) * 1000 : Date.now();
       const stopMs = req.stopsAt ? Number(req.stopsAt.seconds) * 1000 : startMs + 3600_000;
 
-      // Fetch the interface object to resolve isd_as_id and interface_id.
       const interfaceObj = await state.client.getObject({
-        id: interfaceObjectId,
-        options: { showContent: true },
+        objectId: interfaceObjectId,
+        include: { json: true },
       });
       const interfaceFields = getObjectFields(interfaceObj);
       const isdAsId = BigInt(interfaceFields.isd_as_id as string);
@@ -97,46 +95,36 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         coinType: DEFAULT_COIN_TYPE,
       });
 
-      const result = await executeTransaction(
-        state.client as Parameters<typeof executeTransaction>[0],
-        state.signer,
-        tx,
-      );
+      const result = await executeTransaction(state.client, state.signer, tx);
 
-      // The listing object ID is returned as a created object in effects.
-      // Use its ID as an opaque asset_id encoded as BigInt of the hex.
-      const created = result.effects.created?.[0]?.reference?.objectId ?? '0x0';
-      const assetId = BigInt(created);
+      // Find the first created object in effects.
+      const created = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
 
       return new PublishAssetResponse({ assetId: created });
     },
 
     async searchAssets(_req, _ctx) {
       if (_req.owned) {
-        const result = await state.client.getOwnedObjects({
+        const result = await state.client.listOwnedObjects({
           owner: state.signer.getPublicKey().toSuiAddress(),
-          filter: {
-            StructType: getObjectType(state.config.package.id, "hummingbird_asset", "HummingbirdAsset"),
-          },
-          options: {
-            showType: true,
-            showContent: true,
-          },
+          type: getObjectType(state.config.package.id, "hummingbird_asset", "HummingbirdAsset"),
+          include: { json: true },
         });
 
-        const ownedAssets: Asset[] = result.data
-          .filter((obj: any) => obj.data?.content?.dataType === 'moveObject')
-          .map((obj: any) => SuiToRpcAsset(obj)
-          );
+        const ownedAssets: Asset[] = result.objects
+          .filter((obj: any) => obj.json != null)
+          .map((obj: any) => SuiToRpcAsset(obj));
 
         return new SearchAssetsResponse({ owned: _req.owned, assets: ownedAssets });
-      }else{
+      } else {
         function ListingsToAssets(listings: any[]) {
-          return listings.filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject').map(obj => ListingToQueryAsset(obj));
-        };
-        if(_req.ia){
+          return listings
+            .filter((obj: any) => !(obj instanceof Error) && obj.json != null)
+            .map((obj: any) => ListingToQueryAsset(obj));
+        }
+
+        if (_req.ia) {
           const isdAsId = _req.ia;
-          // Derive AsRegistry from GlobalRegistry + isdAsId
           const asRegistryId = deriveObjectID(
             state.globalRegistryId,
             'u64',
@@ -144,14 +132,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           );
           console.log(`[debug] asRegistryId ${asRegistryId}`);
 
-          if(_req.ifIdIngress || _req.ifIdEgress){
+          if (_req.ifIdIngress || _req.ifIdEgress) {
             console.log("Find specific Interface");
-            // Find specific as-interface
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
             if (isdAsId === undefined || interfaceId === undefined) throw new ConnectError("ia and interface id must be specified", Code.InvalidArgument);
 
-
-            // Derive Interface from AsRegistry + interfaceId
             const interfaceObjId = deriveObjectID(
               asRegistryId,
               'u16',
@@ -161,127 +146,121 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
             const listingObjs = await getAllListingsOf(interfaceObjId, state.client);
             console.log(listingObjs);
-            /*const assets: Asset[] = listingObjs
-              .filter((obj: { data: { content: { dataType: string; }; }; }) => obj.data?.content?.dataType === 'moveObject')
-              .map((obj: any) => ListingToQueryAsset(obj));*/
 
             const assets: Asset[] = ListingsToAssets(listingObjs);
             return new SearchAssetsResponse({ owned: _req.owned, assets });
-          }else{
-            try{
-            //fetch all interfaces of the specified AS and add their listings
-            const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
+          } else {
+            try {
+              const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
 
-            var listings: any[] = [];
-            for(const interfaceId of interfaceIds){
-              const ls = await getAllListingsOf(interfaceId, state.client);
-              listings.push(...ls);
+              const listings: any[] = [];
+              for (const interfaceId of interfaceIds) {
+                const ls = await getAllListingsOf(interfaceId, state.client);
+                listings.push(...ls);
+              }
+
+              return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(listings) });
+            } catch (error) {
+              console.log(error);
             }
-
-            return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(listings)});
-          }catch(error){
+            throw new ConnectError("Failed to fetch all Listings");
+          }
+        } else {
+          const result: any[] = [];
+          try {
+            const asRegistries = await getAllRegistries(state.globalRegistryId, state.client);
+            for (const asRegistry of asRegistries) {
+              const interfaces = await getAllInterfacesOf(asRegistry, state.client);
+              for (const interfaceId of interfaces) {
+                const listings = await getAllListingsOf(interfaceId, state.client);
+                result.push(...listings);
+              }
+            }
+          } catch (error) {
             console.log(error);
           }
-          throw new ConnectError("Failed to fetch all Listings");
-          }
-        }else{
-          //Fetch all Listings
-          var result: any[] = [];
-          try{
-          const asRegistries = await getAllRegistries(state.globalRegistryId, state.client);
-          for(const asRegistry of asRegistries){
-            const interfaces = await getAllInterfacesOf(asRegistry,state.client);
-            for(const interfaceId of interfaces){
-              const listings = await getAllListingsOf(interfaceId, state.client);
-              result.push(...listings);
-            }
-          }
-          }catch (error){
-            console.log(error);
-          }
-          return new SearchAssetsResponse({owned: _req.owned, assets: ListingsToAssets(result)});
+          return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(result) });
         }
       }
     },
 
-
     async buyAssets(req, _ctx) {
-      try{
-      // Validate all assets upfront before touching the chain.
-      for (const asset of req.assets) {
-        if (asset.startsAtExactly === undefined || asset.stopsAtExactly === undefined)
-          throw new ConnectError(`must specify start and stop time for asset ${asset.assetId}`);
-        if (asset.bwExact === undefined)
-          throw new ConnectError(`must specify exact bandwidth for asset ${asset.assetId}`);
-      }
+      try {
+        // Validate all assets upfront before touching the chain.
+        for (const asset of req.assets) {
+          if (asset.startsAtExactly === undefined || asset.stopsAtExactly === undefined)
+            throw new ConnectError(`must specify start and stop time for asset ${asset.assetId}`);
+          if (asset.bwExact === undefined)
+            throw new ConnectError(`must specify exact bandwidth for asset ${asset.assetId}`);
+        }
 
-      // Fetch all listing objects and wallet balance in parallel.
-      const [listingResults, { totalBalance }] = await Promise.all([
-        Promise.all(req.assets.map(asset => {
+        // Fetch all listing objects and wallet balance in parallel.
+        const [listingResults, balanceResult] = await Promise.all([
+          Promise.all(req.assets.map(asset => {
+            const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
+            return state.client.getObject({ objectId: listingId, include: { json: true } });
+          })),
+          state.client.getBalance({ owner: state.signer.toSuiAddress() }),
+        ]);
+        const totalBalance = balanceResult.balance.balance;
+
+        // Compute effective price for each asset: duration * bandwidth * unit_price.
+        // GraphQL JSON: nested structs have no `fields` wrapper; UID is a canonical address string.
+        type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; effectivePrice: bigint };
+        const metas: AssetMeta[] = req.assets.map((asset, i) => {
+          const fields = getObjectFields(listingResults[i]!);
+          const interfaceObjectId = fields['interface'] as string;
+          const assetId = (fields['asset'] as Record<string, any>)['id'] as string;
           const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
-          return state.client.getObject({ id: listingId, options: { showContent: true } });
-        })),
-        state.client.getBalance({ owner: state.signer.toSuiAddress() }),
-      ]);
+          const unitPrice = BigInt(fields['price'] as string);
+          const reqStart = BigInt(asset.startsAtExactly!.seconds);
+          const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
+          const reqBw    = BigInt(asset.bwExact!);
+          const effectivePrice = (reqExp - reqStart) * reqBw * unitPrice;
+          return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
+        });
 
-      // Compute effective price for each asset: duration * bandwidth * unit_price.
-      type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; effectivePrice: bigint };
-      const metas: AssetMeta[] = req.assets.map((asset, i) => {
-        const fields = getObjectFields(listingResults[i]);
-        const interfaceObjectId = fields['interface'] as string;
-        const assetId = (fields['asset'] as Record<string, any>)['fields']['id']['id'] as string;
-        const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
-        const unitPrice = BigInt(fields['price'] as string);
-        const reqStart = BigInt(asset.startsAtExactly!.seconds);
-        const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
-        const reqBw    = BigInt(asset.bwExact!);
-        const effectivePrice = (reqExp - reqStart) * reqBw * unitPrice;
-        return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
-      });
-      
-      const totalPrice = metas.reduce((sum, m) => sum + m.effectivePrice, 0n);
+        const totalPrice = metas.reduce((sum, m) => sum + m.effectivePrice, 0n);
 
-      const gasBudget = BigInt(state.config.transaction.gasBudget);
-      const spendable = BigInt(totalBalance) > gasBudget ? BigInt(totalBalance) - gasBudget : 0n;
-      const effectiveMax = req.maxPrice < spendable ? req.maxPrice : spendable;
+        const gasBudget = BigInt(state.config.transaction.gasBudget);
+        const spendable = BigInt(totalBalance) > gasBudget ? BigInt(totalBalance) - gasBudget : 0n;
+        const effectiveMax = req.maxPrice < spendable ? req.maxPrice : spendable;
 
-      if (effectiveMax < totalPrice)
-        throw new ConnectError(`spendable balance (${effectiveMax}) is below estimated total cost (${totalPrice})`);
+        if (effectiveMax < totalPrice)
+          throw new ConnectError(`spendable balance (${effectiveMax}) is below estimated total cost (${totalPrice})`);
 
-      // Build a single PTB — one buyAndTake call per asset, all atomic.
+        const tx = new Transaction();
+        console.log(gasBudget);
+        tx.setGasBudget(gasBudget);
+        const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(effectiveMax)]);
 
-      const tx = new Transaction();
-      tx.setGasBudget(gasBudget);
-      const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(effectiveMax)]);
+        const slack = effectiveMax - totalPrice;
+        for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
+          const slotMax = meta.effectivePrice + (totalPrice > 0n ? slack * meta.effectivePrice / totalPrice : 0n);
+          const [slotCoin] = tx.splitCoins(paymentCoin, [tx.pure.u64(slotMax)]);
+          addBuyAndTake(tx, {
+            packageId: state.config.package.id,
+            interfaceObjectId: meta.interfaceObjectId,
+            listingId: meta.listingId,
+            startTime: BigInt(asset.startsAtExactly!.seconds),
+            expTime:   BigInt(asset.stopsAtExactly!.seconds),
+            bandwidth: BigInt(asset.bwExact!),
+            coinType: DEFAULT_COIN_TYPE,
+          }, slotCoin);
+        }
 
-      const slack = effectiveMax - totalPrice;
-      for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
-        const slotMax = meta.effectivePrice + (totalPrice > 0n ? slack * meta.effectivePrice / totalPrice : 0n);
-        const [slotCoin] = tx.splitCoins(paymentCoin, [tx.pure.u64(slotMax)]);
-        addBuyAndTake(tx, {
-          packageId: state.config.package.id,
-          interfaceObjectId: meta.interfaceObjectId,
-          listingId: meta.listingId,
-          startTime: BigInt(asset.startsAtExactly!.seconds),
-          expTime:   BigInt(asset.stopsAtExactly!.seconds),
-          bandwidth: BigInt(asset.bwExact!),
-          coinType: DEFAULT_COIN_TYPE,
-        }, slotCoin);
-      }
+        tx.mergeCoins(tx.gas, [paymentCoin]);
 
-      // Reclaim any unspent remainder from the payment coin.
-      tx.mergeCoins(tx.gas, [paymentCoin]);
+        const result = await executeTransaction(state.client, state.signer, tx);
+        console.log(result);
 
-      // Execute atomically — all succeed or none go through.
-      const result = await executeTransaction(state.client, state.signer, tx);
-      console.log(result);
+        // BalanceChange.address (new API) replaced old .owner.AddressOwner
+        const balanceChange = result.balanceChanges?.find(c => c.address === state.signer.toSuiAddress());
+        const cost = BigInt(-Number(balanceChange?.amount ?? 0));
 
-      const balanceChange = result.balanceChanges?.find((c: any) => c.owner.AddressOwner === state.signer.toSuiAddress());
-      const cost = BigInt(-Number(balanceChange?.amount ?? 0));
-
-      const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
-      return new BuyAssetsResponse({ assets: bought, cost });}
-      catch(error){
+        const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
+        return new BuyAssetsResponse({ assets: bought, cost });
+      } catch (error) {
         console.log(error);
         throw error;
       }
@@ -293,36 +272,27 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       console.log(ingressId);
       console.log(egressId);
       try {
-        // Fetch asset fields before buildRedeem wraps them into a RedeemRequest on-chain
-        const ingressObj = await state.client.getObject({ id: ingressId, options: { showContent: true } });
+        const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
         const ingressFields = getObjectFields(ingressObj);
         const ia          = BigInt(ingressFields['isd_as_id'] as string);
         const ingressIfId = ingressFields['interface_id'] as number;
         const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
         const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
 
-        const egressObj = await state.client.getObject({ id: egressId, options: { showContent: true } });
+        const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
         const egressFields = getObjectFields(egressObj);
         const egressIfId  = egressFields['interface_id'] as number;
 
-        // Public key management is TBD; hardcoded zeros for now
         const publicKey = new Uint8Array(32);
 
         const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
-        const result = await executeTransaction(
-          state.client as Parameters<typeof executeTransaction>[0],
-          state.signer,
-          tx,
-        );
-        
-        // The redeem() call creates a RedeemRequest object owned by the AS issuer
+        const result = await executeTransaction(state.client, state.signer, tx);
+
         const redeemRequestObjectId = extractCreatedObjectId(
           result,
           getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
         );
 
-        // Wait for the AS to call deliver_reservation(), which deletes the RedeemRequest
-        // and emits ReservationDelivered with the encrypted keys
         const delivery = await state.deliveryListener.waitForDelivery(
           redeemRequestObjectId,
           state.packageId,

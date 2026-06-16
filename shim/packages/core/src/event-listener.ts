@@ -1,5 +1,5 @@
 import { bcs } from '@mysten/sui/bcs';
-import type { SuiJsonRpcClient } from './sui-client.js';
+import type { SuiGraphQLClient } from './sui-client.js';
 import type { SuiGrpcClient } from './sui-client.js';
 
 export interface RedeemEvent {
@@ -22,8 +22,6 @@ export interface RedeemEvent {
 
 export type RedeemEventHandler = (event: RedeemEvent) => void;
 
-interface EventCursor { txDigest: string; eventSeq: string }
-
 // BCS layout of RedeemRequestReceived { redeem_request_id: ID, issuer: address }
 const RedeemRequestReceivedBCS = bcs.struct('RedeemRequestReceived', {
   redeem_request_id: bcs.Address,
@@ -33,23 +31,37 @@ const RedeemRequestReceivedBCS = bcs.struct('RedeemRequestReceived', {
 const RECONNECT_INITIAL_MS = 2_000;
 const RECONNECT_MAX_MS = 30_000;
 
+// GraphQL query for paginating past events by Move event type.
+const EVENTS_QUERY = `
+  query EventCatchUp($eventType: String!, $cursor: String, $limit: Int) {
+    events(filter: { type: $eventType }, first: $limit, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        contents { json }
+        sequenceNumber
+        transaction { digest }
+      }
+    }
+  }
+`;
+
 export class EventListener {
-  readonly #jsonRpc: SuiJsonRpcClient;
+  readonly #graphql: SuiGraphQLClient;
   readonly #grpc: SuiGrpcClient;
   readonly #myAddress: string;
   readonly #onRedeem: RedeemEventHandler;
   readonly #eventType: string;
-  #cursor: EventCursor | null = null;
+  #cursor: string | null = null;
   #stopped = false;
 
   constructor(
-    jsonRpcClient: SuiJsonRpcClient,
+    graphqlClient: SuiGraphQLClient,
     grpcClient: SuiGrpcClient,
     packageId: string,
     myAddress: string,
     onRedeem: RedeemEventHandler,
   ) {
-    this.#jsonRpc = jsonRpcClient;
+    this.#graphql = graphqlClient;
     this.#grpc = grpcClient;
     this.#myAddress = myAddress.toLowerCase();
     this.#onRedeem = onRedeem;
@@ -64,36 +76,37 @@ export class EventListener {
     this.#stopped = true;
   }
 
-  // ----- catch-up (JSON RPC) -----------------------------------------------
+  // ----- catch-up (GraphQL) ------------------------------------------------
 
   async #catchUp(): Promise<void> {
     for (;;) {
-      const page = await this.#jsonRpc.queryEvents({
-        query: { MoveEventType: this.#eventType },
-        cursor: this.#cursor ?? undefined,
-        limit: 50,
-        order: 'ascending',
+      const res = await this.#graphql.query({
+        query: EVENTS_QUERY,
+        variables: {
+          eventType: this.#eventType,
+          cursor: this.#cursor ?? null,
+          limit: 50,
+        },
       });
 
-      for (const raw of page.data) {
-        const ev = raw as {
-          id: EventCursor;
-          parsedJson?: { redeem_request_id?: string; issuer?: string };
-        };
-        const json = ev.parsedJson ?? {};
+      const events = (res as any)?.data?.events;
+      if (!events) break;
+
+      for (const node of events.nodes as any[]) {
+        const json = node.contents?.json ?? {};
         if ((json.issuer ?? '').toLowerCase() !== this.#myAddress) continue;
         if (!json.redeem_request_id) continue;
         await this.#processRequest(
-          ev.id.txDigest,
-          ev.id.eventSeq,
-          json.redeem_request_id,
+          node.transaction?.digest ?? '',
+          String(node.sequenceNumber),
+          json.redeem_request_id as string,
         );
       }
 
-      if (page.nextCursor) {
-        this.#cursor = page.nextCursor as EventCursor;
+      if (events.pageInfo?.endCursor) {
+        this.#cursor = events.pageInfo.endCursor as string;
       }
-      if (!page.hasNextPage) break;
+      if (!events.pageInfo?.hasNextPage) break;
     }
   }
 
@@ -148,35 +161,52 @@ export class EventListener {
     redeemRequestObjectId: string,
   ): Promise<void> {
     console.log("process redemption");
-    const obj = await this.#jsonRpc.getObject({
-      id: redeemRequestObjectId,
-      options: { showContent: true },
-    });
-    console.log(obj);
-    if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') {
-      console.warn(`[EventListener] RedeemRequest ${redeemRequestObjectId} not found or wrong type`);
+    console.log(redeemRequestObjectId);
+
+    // The GraphQL indexer lags behind the gRPC checkpoint stream. Retry until
+    // the object appears, to handle the window between chain commit and indexing.
+    let json: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (attempt > 0) await sleep(1_000 * attempt);
+      try{
+        const obj = await this.#graphql.getObject({
+          objectId: redeemRequestObjectId,
+          include: { json: true },
+        });
+        if (obj.object.json) { json = obj.object.json; break; }
+      }catch{
+        console.warn(`[EventListener] RedeemRequest ${redeemRequestObjectId} not yet indexed (attempt ${attempt + 1})`);
+      }
+    }
+    if (!json) {
+      console.warn(`[EventListener] RedeemRequest ${redeemRequestObjectId} not found after retries`);
       return;
     }
 
-    const fields = (obj.data.content as { dataType: 'moveObject'; fields: Record<string, any> }).fields;
-    const ingressFields = (fields['ingress_asset'] as { fields: Record<string, any> }).fields;
-    const egressFields  = (fields['egress_asset']  as { fields: Record<string, any> }).fields;
+    // In the GraphQL JSON representation, nested structs have no `fields` wrapper.
+    // UID values are canonical address strings (not { id: { id: "0x..." } }).
+    const ingressFields = json['ingress_asset'] as Record<string, unknown>;
+    const egressFields  = json['egress_asset']  as Record<string, unknown>;
+
+    // public_key is vector<u8>, serialized as a Base64 string in GraphQL JSON.
+    const pkRaw = json['public_key'];
+    const publicKey = typeof pkRaw === 'string'
+      ? Uint8Array.from(Buffer.from(pkRaw, 'base64'))
+      : new Uint8Array(pkRaw as number[]);
 
     // Derive a uint64 request correlator from the low 8 bytes of the object ID
     const hex = redeemRequestObjectId.replace(/^0x/, '');
     const requestId = BigInt('0x' + hex.slice(-16));
-
-    this.#cursor = { txDigest, eventSeq };
 
     this.#onRedeem({
       txDigest,
       eventSeq,
       requestId,
       requestObjectId: redeemRequestObjectId,
-      ingressAssetId: (ingressFields['interface_id'] as number).toString(16),
-      egressAssetId:  (egressFields['interface_id']  as number).toString(16),
-      publicKey: new Uint8Array(fields['public_key'] as number[]),
-      buyer: fields['buyer'] as string,
+      ingressAssetId: Number(ingressFields['interface_id']).toString(16),
+      egressAssetId:  Number(egressFields['interface_id']).toString(16),
+      publicKey,
+      buyer: json['buyer'] as string,
       bandwidth: BigInt(ingressFields['bandwidth'] as string),
       startTime: BigInt(ingressFields['start_time'] as string),
       expTime:   BigInt(ingressFields['exp_time']   as string),
