@@ -352,12 +352,59 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       });
     },
 
-    splitAsset(_req, _ctx) {
-      throw new ConnectError('splitAsset is not supported by the underlying Move contract', Code.Unimplemented);
+    async splitAsset(req, _ctx) {
+      if (req.splitOption.case === undefined) {
+        throw new ConnectError('splitOption is required', Code.InvalidArgument);
+      }
+
+      const gasBudget = BigInt(state.config.transaction.gasBudget);
+      const tx = new Transaction();
+      tx.setGasBudget(gasBudget);
+
+      const assetId = '0x' + BigInt(req.assetId).toString(16).padStart(64, '0');
+      const newAsset = req.splitOption.case === 'timeSplit'
+        ? tx.moveCall({
+            target: `${state.config.package.id}::hummingbird_asset::split_time`,
+            arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.seconds))],
+          })
+        : tx.moveCall({
+            target: `${state.config.package.id}::hummingbird_asset::split_bandwidth`,
+            arguments: [tx.object(assetId), tx.pure.u64(req.splitOption.value)],
+          });
+
+      tx.transferObjects([newAsset], tx.pure.address(state.signer.toSuiAddress()));
+
+      const result = await executeTransaction(state.client, state.signer, tx);
+      const newAssetId = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
+
+      return new SplitAssetResponse({ assetId1: req.assetId, assetId2: BigInt(newAssetId).toString() });
     },
 
-    combineAssets(_req, _ctx) {
-      throw new ConnectError('combineAssets is not supported by the underlying Move contract', Code.Unimplemented);
+    async combineAssets(req, _ctx) {
+      const assetId1 = '0x' + BigInt(req.assetId1).toString(16).padStart(64, '0');
+      const assetId2 = '0x' + BigInt(req.assetId2).toString(16).padStart(64, '0');
+
+      const [obj1, obj2] = await Promise.all([
+        state.client.getObject({ objectId: assetId1, include: { json: true } }),
+        state.client.getObject({ objectId: assetId2, include: { json: true } }),
+      ]);
+
+      const fields1 = getObjectFields(obj1);
+      const fields2 = getObjectFields(obj2);
+      const fuseFunction = fields1.bandwidth === fields2.bandwidth ? 'fuse_time' : 'fuse_bandwidth';
+
+      const gasBudget = BigInt(state.config.transaction.gasBudget);
+      const tx = new Transaction();
+      tx.setGasBudget(gasBudget);
+
+      tx.moveCall({
+        target: `${state.config.package.id}::hummingbird_asset::${fuseFunction}`,
+        arguments: [tx.object(assetId1), tx.object(assetId2)],
+      });
+
+      await executeTransaction(state.client, state.signer, tx);
+
+      return new CombineAssetResponse({ assetId: req.assetId1 });
     },
   };
 }
