@@ -4,6 +4,7 @@ module hummingbird::hummingbird_asset {
     use sui::tx_context::{Self, TxContext};
     use sui::event;
     use std::u64;
+    use hummingbird::registry::{AsAuthCap, cap_isd_as_id};
 
     const INGRESS_INTERFACE: u8 = 0;
     const EGRESS_INTERFACE: u8 = 1;
@@ -12,6 +13,7 @@ module hummingbird::hummingbird_asset {
     const EInvalidBandwidth: u64 = 1;
     const EInvalidTimeGranularity: u64 = 2;
     const EAssetMismatch: u64 = 3;
+    const EUnauthorized: u64 = 7;
     const EWrongInterfaceFuse: u64 = 4;
     const EInsufficientFuseBandwidth: u64 = 5;
     const ENonOverlappingAssets: u64 = 6;
@@ -27,6 +29,7 @@ module hummingbird::hummingbird_asset {
         start_time: u64,
         exp_time: u64,
         time_granularity: u64,
+        time_min_duration: u64,
         min_bandwidth: u64,
         issuer: address,
     }
@@ -75,12 +78,14 @@ module hummingbird::hummingbird_asset {
     public fun get_start_time(a: &HummingbirdAsset): u64 { a.start_time }
     public fun get_exp_time(a: &HummingbirdAsset): u64 { a.exp_time }
     public fun get_time_granularity(a: &HummingbirdAsset): u64 { a.time_granularity }
+    public fun get_time_min_duration(a: &HummingbirdAsset): u64 { a.time_min_duration }
     public fun get_min_bandwidth(a: &HummingbirdAsset): u64 { a.min_bandwidth }
     public fun get_issuer(a: &HummingbirdAsset): address { a.issuer }
 
     // --- Issue / destroy ---
 
     public fun issue(
+        cap: &AsAuthCap,
         isd_as_id: u64,
         interface_id: u16,
         interface_type: u8,
@@ -88,10 +93,12 @@ module hummingbird::hummingbird_asset {
         start_time: u64,
         exp_time: u64,
         time_granularity: u64,
+        time_min_duration: u64,
         min_bandwidth: u64,
         issuer: address,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
+        assert!(cap_isd_as_id(cap) == isd_as_id, EUnauthorized);
         assert!(exp_time > start_time, EInvalidTimeInterval);
         assert!(bandwidth >= min_bandwidth && min_bandwidth > 0, EInvalidBandwidth);
         assert!(
@@ -108,6 +115,7 @@ module hummingbird::hummingbird_asset {
             start_time,
             exp_time,
             time_granularity,
+            time_min_duration,
             min_bandwidth,
             issuer,
         }
@@ -117,7 +125,8 @@ module hummingbird::hummingbird_asset {
         let HummingbirdAsset {
             id, isd_as_id: _, interface_id: _, interface_type: _,
             bandwidth: _, start_time: _, exp_time: _,
-            time_granularity: _, min_bandwidth: _, issuer: _,
+            time_granularity: _, 
+            time_min_duration: _, min_bandwidth: _, issuer: _,
         } = a;
         object::delete(id);
     }
@@ -136,6 +145,9 @@ module hummingbird::hummingbird_asset {
                 && (split_time - a.start_time) % a.time_granularity == 0,
             EInvalidTimeInterval
         );
+        assert!(split_time - a.start_time >= a.time_min_duration 
+                && a.exp_time - split_time >= a.time_min_duration, 
+                EInvalidTimeInterval);
         let right = HummingbirdAsset {
             id: object::new(ctx),
             isd_as_id: a.isd_as_id,
@@ -145,6 +157,7 @@ module hummingbird::hummingbird_asset {
             start_time: split_time,
             exp_time: a.exp_time,
             time_granularity: a.time_granularity,
+            time_min_duration: a.time_min_duration,
             min_bandwidth: a.min_bandwidth,
             issuer: a.issuer,
         };
@@ -173,6 +186,7 @@ module hummingbird::hummingbird_asset {
             start_time: a.start_time,
             exp_time: a.exp_time,
             time_granularity: a.time_granularity,
+            time_min_duration: a.time_min_duration,
             min_bandwidth: a.min_bandwidth,
             issuer: a.issuer,
         };
@@ -197,7 +211,8 @@ module hummingbird::hummingbird_asset {
         let HummingbirdAsset {
             id: sid, isd_as_id: _, interface_id: _, interface_type: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
-            time_granularity: _, min_bandwidth: smin, issuer: _,
+            time_granularity: _, time_min_duration: _,
+            min_bandwidth: smin, issuer: _,
         } = second;
         object::delete(sid);
         first.start_time = u64::min(first.start_time, sst);
@@ -213,7 +228,7 @@ module hummingbird::hummingbird_asset {
         let HummingbirdAsset {
             id: sid, isd_as_id: _, interface_id: _, interface_type: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
-            time_granularity: _, min_bandwidth: smin, issuer: _,
+            time_granularity: _, time_min_duration: _, min_bandwidth: smin, issuer: _,
         } = second;
         object::delete(sid);
         first.start_time = u64::max(first.start_time, sst);

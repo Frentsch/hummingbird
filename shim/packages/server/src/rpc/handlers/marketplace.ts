@@ -69,18 +69,31 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const startMs = req.startAt ? Number(req.startAt.seconds) * 1000 : Date.now();
       const stopMs = req.stopsAt ? Number(req.stopsAt.seconds) * 1000 : startMs + 3600_000;
 
+      // Fetch the interface object to resolve isd_as_id and interface_id.
+      const interfaceObj = await state.client.getObject({
+        id: interfaceObjectId,
+        options: { showContent: true },
+      });
+      const interfaceFields = getObjectFields(interfaceObj);
+      const isdAsId = BigInt(interfaceFields.isd_as_id as string);
+      const interfaceId = interfaceFields.interface_id as number;
+
       const tx = buildCreateListing({
         packageId: state.packageId,
         interfaceObjectId,
         interfaceType: req.ifIdIngress ? 0: 1,
         asAuthCapId: state.asAuthCapId,
         sellerAuthTokenId: state.sellerAuthTokenId,
+        isdAsId,
+        interfaceId,
         bandwidth: req.bandwidth as bigint,
         startTime: BigInt(Math.floor(startMs)),
         expTime: BigInt(Math.floor(stopMs)),
         timeGranularity: req.timeGranularity as bigint,
+        timeMinDuration: req.timeGranularity as bigint,
         minBandwidth: req.bandwidthMin as bigint,
         price: req.price as bigint,
+        issuer: state.signer.getPublicKey().toSuiAddress(),
         coinType: DEFAULT_COIN_TYPE,
       });
 

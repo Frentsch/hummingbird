@@ -41,12 +41,16 @@ describe('transaction builders', () => {
       interfaceType: 0,
       asAuthCapId: FAKE_OBJ,
       sellerAuthTokenId: FAKE_OBJ,
+      isdAsId: 1n,
+      interfaceId: 1,
       bandwidth: 1000n,
       startTime: 1000n,
       expTime: 2000n,
       timeGranularity: 100n,
+      timeMinDuration: 100n,
       minBandwidth: 100n,
       price: 10n,
+      issuer: '0x0000000000000000000000000000000000000000000000000000000000000001',
       coinType: COIN_TYPE,
     });
     expect(tx).toBeInstanceOf(Transaction);
@@ -82,6 +86,9 @@ describe('transaction builders', () => {
       packageId: FAKE_PKG,
       redeemRequestId: FAKE_OBJ,
       encryptedReservation: new Uint8Array([4, 5, 6]),
+      resId: 1n,
+      bwRounded: 100n,
+      bwDataplaneEncoding: 0,
     });
     expect(tx).toBeInstanceOf(Transaction);
   });

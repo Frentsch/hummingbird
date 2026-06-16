@@ -1,15 +1,18 @@
 import { Transaction } from '@mysten/sui/transactions';
-import { moveTarget } from './manifest.js';
 
 export interface CreateListingParams {
   packageId: string;
   /** Object ID of the Interface (router) shared object. */
   interfaceObjectId: string;
-  interfaceType: number;
-  /** Object ID of the AsAuthCap owned object. */
+  /** Object ID of the AsAuthCap owned object — required for hummingbird_asset::issue. */
   asAuthCapId: string;
   /** Object ID of the SellerAuthToken owned object. */
   sellerAuthTokenId: string;
+  /** ISD-AS ID (u64) — read from the Interface object before calling. */
+  isdAsId: bigint;
+  /** Interface ID (u16) — read from the Interface object before calling. */
+  interfaceId: number;
+  interfaceType: number;
   /** Total bandwidth in kbps (u64). */
   bandwidth: bigint;
   /** Listing start time in ms since epoch (u64). */
@@ -18,35 +21,53 @@ export interface CreateListingParams {
   expTime: bigint;
   /** Time granularity in ms (u64). */
   timeGranularity: bigint;
+  /** Minimum purchasable time slice in ms (u64). */
+  timeMinDuration: bigint;
   /** Minimum purchasable bandwidth in kbps (u64). */
   minBandwidth: bigint;
   /** Price in base coin units (u64). */
   price: bigint;
+  /** Issuer address — the transaction signer. */
+  issuer: string;
   /** Coin type, e.g. "0x2::sui::SUI". */
   coinType: string;
 }
 
 /**
- * Build a PTB that calls marketplace::create_listing_entry<COIN>.
- * Issues a HummingbirdAsset internally and stores it in the Interface's ObjectBag.
+ * Build a PTB that:
+ *   1. Calls hummingbird_asset::issue (requires AsAuthCap) to mint the asset.
+ *   2. Calls marketplace::create_listing to wrap it in a listing on the interface.
  */
 export function buildCreateListing(params: CreateListingParams): Transaction {
   const tx = new Transaction();
-  tx.moveCall({
-    target: moveTarget(params.packageId, 'createListing'),
-    typeArguments: [params.coinType],
+
+  const asset = tx.moveCall({
+    target: `${params.packageId}::hummingbird_asset::issue`,
     arguments: [
-      tx.object(params.interfaceObjectId),
       tx.object(params.asAuthCapId),
+      tx.pure.u64(params.isdAsId),
+      tx.pure.u16(params.interfaceId),
       tx.pure.u8(params.interfaceType),
       tx.pure.u64(params.bandwidth),
       tx.pure.u64(params.startTime),
       tx.pure.u64(params.expTime),
       tx.pure.u64(params.timeGranularity),
+      tx.pure.u64(params.timeMinDuration),
       tx.pure.u64(params.minBandwidth),
+      tx.pure.address(params.issuer),
+    ],
+  });
+
+  tx.moveCall({
+    target: `${params.packageId}::marketplace::create_listing`,
+    typeArguments: [params.coinType],
+    arguments: [
+      tx.object(params.interfaceObjectId),
+      asset,
       tx.pure.u64(params.price),
       tx.object(params.sellerAuthTokenId),
     ],
   });
+
   return tx;
 }

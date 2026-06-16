@@ -38,10 +38,16 @@ export const OPERATIONS = {
     fn: 'create_interface',
     typeArgCount: 0,
   },
+  issueAsset: {
+    name: 'issueAsset',
+    module: 'hummingbird_asset',
+    fn: 'issue',
+    typeArgCount: 0,
+  },
   createListing: {
     name: 'createListing',
     module: 'marketplace',
-    fn: 'create_listing_entry',
+    fn: 'create_listing',
     typeArgCount: 1,
   },
   buyAndTake: {

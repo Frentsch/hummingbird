@@ -26,12 +26,16 @@ export const CreateListingBody = z.object({
   asAuthCapId: SuiObjectId,
   interfaceType: z.number().int().min(0).max(255),
   sellerAuthTokenId: SuiObjectId,
+  isdAsId: Uint64Str.transform(BigInt),
+  interfaceId: z.number().int().min(0).max(65535),
   bandwidth: Uint64Str.transform(BigInt),
   startTime: Uint64Str.transform(BigInt),
   expTime: Uint64Str.transform(BigInt),
   timeGranularity: Uint64Str.transform(BigInt),
+  timeMinDuration: Uint64Str.transform(BigInt),
   minBandwidth: Uint64Str.transform(BigInt),
   price: Uint64Str.transform(BigInt),
+  issuer: z.string().regex(/^0x[0-9a-fA-F]+$/, 'Must be a 0x-prefixed hex Sui address'),
   coinType: CoinType,
 });
 
@@ -55,6 +59,9 @@ export const RedeemBody = z.object({
 export const DeliverReservationBody = z.object({
   redeemRequestId: SuiObjectId,
   encryptedReservation: z.array(z.number().int().min(0).max(255)),
+  resId: Uint64Str.transform(BigInt),
+  bwRounded: Uint64Str.transform(BigInt),
+  bwDataplaneEncoding: z.number().int().min(0).max(65535),
 });
 
 export const DelistAndTakeBody = z.object({

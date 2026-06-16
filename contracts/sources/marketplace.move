@@ -12,8 +12,6 @@ module hummingbird::marketplace {
     const EUnauthorized: u64 = 0;
     const EInvalidInterval: u64 = 1;
     const EInvalidBandwidth: u64 = 2;
-    const EInvalidTimeGranularity: u64 = 3;
-    const EInvalidMinBandwidth: u64 = 4;
     const EInsufficientPayment: u64 = 5;
     const ENotSeller: u64 = 6;
 
@@ -31,8 +29,6 @@ module hummingbird::marketplace {
         interface: ID,
         asset: HummingbirdAsset,
         price: u64,
-        time_granularity: u64,
-        min_bandwidth: u64,
         seller: Seller,
     }
 
@@ -98,72 +94,39 @@ module hummingbird::marketplace {
 
     // --- Root listing creation ---
 
-    /// AS creates a new root listing. Issues a HummingbirdAsset internally and
-    /// wraps it in a listing stored in the interface's ObjectBag.
+    /// Wraps an already-issued HummingbirdAsset into a listing stored in the
+    /// interface's ObjectBag. Open to anyone; validates that the asset belongs
+    /// to this interface (matching isd_as_id and interface_id).
     public fun create_listing<COIN>(
         interface: &mut Interface,
-        cap: &AsAuthCap,
-        interface_type: u8,
-        bandwidth: u64,
-        start_time: u64,
-        exp_time: u64,
-        time_granularity: u64,
-        min_bandwidth: u64,
+        asset: HummingbirdAsset,
         price: u64,
         seller_token: &SellerAuthToken,
         ctx: &mut TxContext,
     ): ID {
-        let isd_as_id = registry::interface_isd_as_id(interface);
-        assert!(registry::cap_isd_as_id(cap) == isd_as_id , EUnauthorized);
-        let asset_duration = exp_time - start_time;
         assert!(
-            time_granularity != 0
-                && asset_duration % time_granularity == 0,
-            EInvalidTimeGranularity
+            hummingbird_asset::get_isd_as_id(&asset) == registry::interface_isd_as_id(interface)
+                && hummingbird_asset::get_interface_id(&asset) == registry::interface_id(interface),
+            EUnauthorized
         );
-        assert!(
-            min_bandwidth > 0 && min_bandwidth <= bandwidth,
-            EInvalidMinBandwidth
-        );
-        let asset = hummingbird_asset::issue(
-            registry::interface_isd_as_id(interface),
-            registry::interface_id(interface),
-            interface_type,
-            bandwidth,
-            start_time,
-            exp_time,
-            time_granularity,
-            min_bandwidth,
-            tx_context::sender(ctx),
-            ctx,
-        );
-        let listing_id: ID = new_listing_id_and_add<COIN>(
+        new_listing_id_and_add<COIN>(
             interface,
             asset,
             price,
-            time_granularity,
-            min_bandwidth,
             Seller { token_id: object::id(seller_token), payment_address: seller_token.payment_address },
             ctx,
-        );
-        listing_id
+        )
     }
 
     #[lint_allow(self_transfer)]
     public entry fun create_listing_entry<COIN>(
         interface: &mut Interface,
-        cap: &AsAuthCap,
-        interface_type: u8,
-        bandwidth: u64,
-        start_time: u64,
-        exp_time: u64,
-        time_granularity: u64,
-        min_bandwidth: u64,
+        asset: HummingbirdAsset,
         price: u64,
         seller_token: &SellerAuthToken,
         ctx: &mut TxContext,
     ) {
-        create_listing<COIN>(interface, cap, interface_type, bandwidth, start_time, exp_time, time_granularity, min_bandwidth, price, seller_token, ctx);
+        create_listing<COIN>(interface, asset, price, seller_token, ctx);
     }
 
     // --- Buy ---
@@ -238,7 +201,7 @@ module hummingbird::marketplace {
         seller_token: &SellerAuthToken,
     ): HummingbirdAsset {
         let AssetListing<COIN> {
-            id, interface: _, asset, price: _, time_granularity: _, min_bandwidth: _, seller,
+            id, interface: _, asset, price: _, seller,
         } = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
         assert!(seller.token_id == object::id(seller_token), ENotSeller);
         object::delete(id);
@@ -268,7 +231,7 @@ module hummingbird::marketplace {
         assert!(
             split_time > old_start
                 && split_time < old_exp
-                && (split_time - old_start) % listing.time_granularity == 0,
+                && (split_time - old_start) % hummingbird_asset::get_time_granularity(&listing.asset) == 0,
             EInvalidInterval
         );
         let right_asset = hummingbird_asset::split_time(&mut listing.asset, split_time, ctx);
@@ -277,8 +240,6 @@ module hummingbird::marketplace {
             interface: listing.interface,
             asset: right_asset,
             price: listing.price,
-            time_granularity: listing.time_granularity,
-            min_bandwidth: listing.min_bandwidth,
             seller: listing.seller,
         }
     }
@@ -289,10 +250,11 @@ module hummingbird::marketplace {
         ctx: &mut TxContext,
     ): AssetListing<COIN> {
         let old_bw = hummingbird_asset::get_bandwidth(&listing.asset);
+        let min_bw = hummingbird_asset::get_min_bandwidth(&listing.asset);
         assert!(
             split_bw < old_bw
-                && split_bw >= listing.min_bandwidth
-                && old_bw - split_bw >= listing.min_bandwidth,
+                && split_bw >= min_bw
+                && old_bw - split_bw >= min_bw,
             EInvalidBandwidth
         );
         let upper_asset = hummingbird_asset::split_bandwidth(&mut listing.asset, split_bw, ctx);
@@ -301,8 +263,6 @@ module hummingbird::marketplace {
             interface: listing.interface,
             asset: upper_asset,
             price: listing.price,
-            time_granularity: listing.time_granularity,
-            min_bandwidth: listing.min_bandwidth,
             seller: listing.seller,
         }
     }
@@ -373,7 +333,7 @@ module hummingbird::marketplace {
         ctx: &mut TxContext,
     ): (HummingbirdAsset, Coin<COIN>) {
         let AssetListing<COIN> {
-            id, interface: _, asset, price, time_granularity: _, min_bandwidth: _, seller,
+            id, interface: _, asset, price, seller,
         } = listing;
         object::delete(id);
         let duration        = hummingbird_asset::get_exp_time(&asset) - hummingbird_asset::get_start_time(&asset);
@@ -390,8 +350,6 @@ module hummingbird::marketplace {
         interface: &mut Interface,
         asset: HummingbirdAsset,
         price: u64,
-        time_granularity: u64,
-        min_bandwidth: u64,
         seller: Seller,
         ctx: &mut TxContext,
     ): ID {
@@ -413,7 +371,7 @@ module hummingbird::marketplace {
         object_bag::add(
             registry::interface_listings(interface),
             listing_id,
-            AssetListing<COIN> { id, interface: interface_address, asset, price, time_granularity, min_bandwidth, seller },
+            AssetListing<COIN> { id, interface: interface_address, asset, price, seller },
         );
         listing_id
     }

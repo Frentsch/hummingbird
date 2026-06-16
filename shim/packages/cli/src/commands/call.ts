@@ -146,7 +146,7 @@ export function makeCallCommand(): Command {
     coinTypeOpt(
       configOpt(
         new Command('create-listing')
-          .description('Create a new asset listing on an Interface')
+          .description('Issue a HummingbirdAsset and create a listing on an Interface')
           .option('--interface-object-id <id>', 'Interface object ID')
           .requiredOption('--interface-type <n>', 'Interface Type (0=Ingress, 1=Egress)', parseInt)
           .option('--as-auth-cap-id <id>', 'AsAuthCap object ID (fallback: as.asAuthCapId in config)')
@@ -154,7 +154,8 @@ export function makeCallCommand(): Command {
           .requiredOption('--bandwidth <n>', 'Total bandwidth in kb/s (u64)', parseInt)
           .requiredOption('--start-time <s>', 'Start epoch seconds (u64)', parseInt)
           .requiredOption('--exp-time <s>', 'Expiry epoch seconds (u64)', parseInt)
-          .requiredOption('--time-granularity <n>', 'Minimum time slice (u64)', parseInt)
+          .requiredOption('--time-granularity <n>', 'Minimum time slice in ms (u64)', parseInt)
+          .option('--time-min-duration <n>', 'Minimum purchasable duration in ms (u64, defaults to --time-granularity)', parseInt)
           .requiredOption('--min-bandwidth <n>', 'Minimum bandwidth slice (u64)', parseInt)
           .requiredOption('--price <n>', 'Price in coin base units per unit bandwidth per time (u64)', parseInt),
       ),
@@ -169,6 +170,7 @@ export function makeCallCommand(): Command {
         startTime: number;
         expTime: number;
         timeGranularity: number;
+        timeMinDuration?: number;
         minBandwidth: number;
         price: number;
         coinType: string;
@@ -176,24 +178,39 @@ export function makeCallCommand(): Command {
         const ctx = await makeCtx(opts.config);
         const asAuthCapId = resolve(opts.asAuthCapId, ctx.config.as?.asAuthCapId, 'as-auth-cap-id');
         const sellerAuthTokenId = resolve(opts.sellerAuthTokenId, ctx.config.as?.sellerAuthTokenId, 'seller-auth-token-id');
+        const interfaceObjectId = resolve(opts.interfaceObjectId, ctx.config.as?.interfaces ? ctx.config.as.interfaces[0] : undefined, 'interface-object-id');
+
+        // Fetch interface object to get isd_as_id and interface_id.
+        const interfaceObj = await ctx.client.getObject({
+          id: interfaceObjectId,
+          options: { showContent: true },
+        });
+        const interfaceFields = getObjectFields(interfaceObj);
+        const isdAsId = BigInt(interfaceFields.isd_as_id as string);
+        const interfaceId = interfaceFields.interface_id as number;
+
         const result = await runTx(
           ctx,
           buildCreateListing({
             packageId: ctx.config.package.id,
-            interfaceObjectId: resolve(opts.interfaceObjectId, ctx.config.as?.interfaces ? ctx.config.as.interfaces[0]:undefined, 'interface-object-id'),
+            interfaceObjectId,
             interfaceType: opts.interfaceType,
             asAuthCapId,
             sellerAuthTokenId,
+            isdAsId,
+            interfaceId,
             bandwidth: BigInt(opts.bandwidth),
             startTime: BigInt(opts.startTime),
             expTime: BigInt(opts.expTime),
             timeGranularity: BigInt(opts.timeGranularity),
+            timeMinDuration: BigInt(opts.timeMinDuration ?? opts.timeGranularity),
             minBandwidth: BigInt(opts.minBandwidth),
             price: BigInt(opts.price),
+            issuer: ctx.signer.getPublicKey().toSuiAddress(),
             coinType: opts.coinType,
           }),
         );
-        console.log(`Successfully published listing at ${extractCreatedObjectId(result, getObjectType(ctx.config.package.id,"marketplace",`AssetListing<${opts.coinType.toString()}>`))}`);
+        console.log(`Successfully published listing at ${extractCreatedObjectId(result, getObjectType(ctx.config.package.id, "marketplace", `AssetListing<${opts.coinType.toString()}>`))}`)
       },
     ),
   );
