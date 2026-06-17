@@ -4,12 +4,14 @@ import type { MarketplaceService as IMarketplaceService } from '../gen/hummingbi
 import {
   MarketplaceInfoResponse,
   PublishAssetResponse,
+  SearchAssetsRequest,
   SearchAssetsResponse,
   Asset,
   AssetType,
   BuyAssetsResponse,
   BoughtAsset,
   RedeemAssetResponse,
+  FetchReservationsRequest,
   FetchReservationsResponse,
   SplitAssetResponse,
   CombineAssetResponse,
@@ -42,6 +44,32 @@ import { ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 
 const API_MAJOR_VERSION = 0n;
 const API_MINOR_VERSION = 1n;
+
+function filterAsset(asset: Asset, req: SearchAssetsRequest): boolean {
+  if (req.ia              !== undefined && asset.ia          !== req.ia)              return false;
+  if (req.assetType       !== undefined && asset.assetType   !== req.assetType)       return false;
+  if (req.ifIdIngress     !== undefined && asset.ifIdIngress !== req.ifIdIngress)     return false;
+  if (req.ifIdEgress      !== undefined && asset.ifIdEgress  !== req.ifIdEgress)      return false;
+  if (req.minRequiredBw   !== undefined && asset.bw          <  req.minRequiredBw)   return false;
+  if (req.price           !== undefined && asset.price       >  req.price)            return false;
+  if (req.startsAtLatest  !== undefined && asset.startsAt    !== undefined &&
+      asset.startsAt.seconds > req.startsAtLatest.seconds)                            return false;
+  if (req.stopsAtEarliest !== undefined && asset.stopsAt     !== undefined &&
+      asset.stopsAt.seconds  < req.stopsAtEarliest.seconds)                           return false;
+  return true;
+}
+
+function filterReservation(r: Reservation, req: FetchReservationsRequest): boolean {
+  if (req.ia        !== undefined && r.ia        !== req.ia)        return false;
+  if (req.ingressId !== undefined && r.ingressId !== req.ingressId) return false;
+  if (req.egressId  !== undefined && r.egressId  !== req.egressId)  return false;
+  if (req.bw        !== undefined && r.bw        !== req.bw)        return false;
+  if (req.startsAt  !== undefined && r.startsAt  !== undefined &&
+      r.startsAt.seconds < req.startsAt.seconds)                    return false;
+  if (req.stopsAt   !== undefined && r.stopsAt   !== undefined &&
+      r.stopsAt.seconds  > req.stopsAt.seconds)                     return false;
+  return true;
+}
 
 export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceImpl<typeof IMarketplaceService>> {
   return {
@@ -113,14 +141,16 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
         const ownedAssets: Asset[] = result.objects
           .filter((obj: any) => obj.json != null)
-          .map((obj: any) => SuiToRpcAsset(obj));
+          .map((obj: any) => SuiToRpcAsset(obj))
+          .filter((asset: Asset) => filterAsset(asset, _req));
 
         return new SearchAssetsResponse({ owned: _req.owned, assets: ownedAssets });
       } else {
         function ListingsToAssets(listings: any[]) {
           return listings
             .filter((obj: any) => !(obj instanceof Error) && obj.json != null)
-            .map((obj: any) => ListingToQueryAsset(obj));
+            .map((obj: any) => ListingToQueryAsset(obj))
+            .filter((asset: Asset) => filterAsset(asset, _req));
         }
 
         if (_req.ia) {
@@ -336,7 +366,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if (req.bw        !== undefined) filter.bw        = req.bw;
       if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.toDate();
       if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.toDate();
-      const rows = queryReservations(state.db, filter);
+      const rows = queryReservations(state.db, filter).filter(r => filterReservation(new Reservation({
+        ia: r.ia, ingressId: r.ingressId, egressId: r.egressId, bw: r.bw,
+        startsAt: Timestamp.fromDate(r.startsAt), stopsAt: Timestamp.fromDate(r.stopsAt),
+      }), req));
       console.log(rows);
       return new FetchReservationsResponse({
         reservations: rows.map(r => new Reservation({
