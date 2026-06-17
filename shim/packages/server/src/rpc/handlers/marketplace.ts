@@ -21,6 +21,7 @@ import { Timestamp } from '@bufbuild/protobuf';
 import { Transaction } from '@mysten/sui/transactions';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
+import { SimulationError } from '@mysten/sui/client';
 import {
   buildCreateListing,
   addBuyAndTake,
@@ -37,10 +38,13 @@ import {
   DeliveryTimeoutError,
   insertReservation,
   queryReservations,
+  buildRegisterAs,
+  buildCreateInterface,
+  saveConfig,
 } from '@sui-shim/core';
 import type { ReservationFilter } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
-import { ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
+import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 
 const API_MAJOR_VERSION = 0n;
 const API_MINOR_VERSION = 1n;
@@ -83,25 +87,66 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async publishAsset(req, _ctx) {
+      if(!state.config.as.isdAsId) throw new ConnectError('AS ID not configured. Set your isd-as-id in the config', Code.Unauthenticated);
+      
+      if(!state.config.package.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
       if (req.ifIdIngress === undefined && req.ifIdEgress === undefined) {
         throw new ConnectError('At least one of if_id_ingress or if_id_egress must be set', Code.InvalidArgument);
       }
+      if(req.bandwidth<=0) throw new ConnectError('Bandwidth must be at least 1', Code.FailedPrecondition);
+      if(!req.startAt || !req.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
+      if(req.bandwidthMin<=req.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
+      if(req.timeMinDuration<=req.stopsAt.seconds-req.startAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
+      const isdAsId = state.config.as.isdAsId;
+      try{
+      //create as registry if not existing
+      const derivedAsRegistryId = deriveObjectID(state.config.package.globalRegistryId, 'u64', bcs.U64.serialize(isdAsId).toBytes());
+      const { objects: [asRegistryResult] } = await state.client.getObjects({ objectIds: [derivedAsRegistryId] });
+      if (asRegistryResult instanceof Error) {
+        const result = await executeTransaction(state.client, state.signer,
+          buildRegisterAs({
+            packageId: state.config.package.id,
+            globalRegistryId: state.config.package.globalRegistryId,
+            isdAsId: BigInt(isdAsId)
+          })
+        );
+        state.config.as.asAuthCapId = extractCreatedObjectId(result, getObjectType(state.config.package.id, "registry", "AsAuthCap"));
+      }
+      state.config.as.asRegistryId = derivedAsRegistryId;
+      saveConfig(state.config);
 
+      //create interface if not exists
       const ifId = req.ifIdIngress ?? req.ifIdEgress!;
-      const interfaceObjectId = state.interfaceObjects.get(ifId);
-      if (!interfaceObjectId) {
-        throw new ConnectError(`Interface ${ifId} not registered on this daemon`, Code.NotFound);
+      const interfaceObjectId = deriveObjectID(state.config.as.asRegistryId, 'u16',  bcs.U16.serialize(ifId).toBytes());
+      const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
+      if (interfaceResult instanceof Error) {
+        try{
+          await executeTransaction(state.client, state.signer,
+            buildCreateInterface({
+              packageId: state.config.package.id,
+              asRegistryId: state.config.as.asRegistryId,
+              asAuthCapId: state.config.as.asAuthCapId!,
+              interfaceId: ifId,
+            })
+          );
+        }catch(error){
+          console.log(error);
+          if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
+            const {abortCode} = error.executionError.MoveAbort;
+            
+            if(abortCode=="2") throw new ConnectError('Unauthorized: invalid auth cap. Set the correct auth cap in the config', Code.FailedPrecondition);
+          }else throw error;
+        }
       }
 
-      const startMs = req.startAt ? Number(req.startAt.seconds) * 1000 : Date.now();
-      const stopMs = req.stopsAt ? Number(req.stopsAt.seconds) * 1000 : startMs + 3600_000;
+      const start = req.startAt ? Number(req.startAt.seconds)  : Date.now();
+      const stop = req.stopsAt ? Number(req.stopsAt.seconds) : start + 3600;
 
       const interfaceObj = await state.client.getObject({
         objectId: interfaceObjectId,
         include: { json: true },
       });
       const interfaceFields = getObjectFields(interfaceObj);
-      const isdAsId = BigInt(interfaceFields.isd_as_id as string);
       const interfaceId = interfaceFields.interface_id as number;
 
       const tx = buildCreateListing({
@@ -113,8 +158,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         isdAsId,
         interfaceId,
         bandwidth: req.bandwidth as bigint,
-        startTime: BigInt(Math.floor(startMs)),
-        expTime: BigInt(Math.floor(stopMs)),
+        startTime: BigInt(Math.floor(start)),
+        expTime: BigInt(Math.floor(stop)),
         timeGranularity: req.timeGranularity as bigint,
         timeMinDuration: req.timeGranularity as bigint,
         minBandwidth: req.bandwidthMin as bigint,
@@ -128,7 +173,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       // Find the first created object in effects.
       const created = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
 
-      return new PublishAssetResponse({ assetId: created });
+      return new PublishAssetResponse({ assetId: BigInt(created).toString() });
+    }catch(error){
+      console.log(error);
+      return new ConnectError("error");
+    }
     },
 
     async searchAssets(_req, _ctx) {

@@ -22,7 +22,7 @@ import {
   getObjectFields,
 } from '@sui-shim/core';
 import type { SuiClientTypes } from '@mysten/sui/client';
-import { deriveObjectID } from '@mysten/sui/utils';
+import { deriveObjectID, isValidSuiObjectId } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import { makeCtx, runTx } from '../ctx.js';
 import { getDefaultAddress } from './keys.js';
@@ -58,7 +58,7 @@ export function makeCallCommand(): Command {
         .option('--global-registry-id <id>', 'Global registry shared object ID (fallback: package.globalRegistryId in config)')
         .option('--set-active','Set the created registry as the default for further commands')
         .requiredOption('--isd-as-id <n>', 'ISD-AS identifier (integer)', parseInt),
-    ).action(async (opts: { config: string; globalRegistryId?: string;setActive: boolean, isdAsId: number }) => {
+    ).action(async (opts: { config: string; globalRegistryId?: string;setActive: boolean, isdAsId: string }) => {
       const ctx = await makeCtx(opts.config);
       const globalRegistryId = resolve(opts.globalRegistryId, ctx.config.package?.globalRegistryId, 'global-registry-id');
       const result = await runTx(ctx, buildRegisterAs({ packageId: ctx.config.package.id, globalRegistryId, isdAsId: BigInt(opts.isdAsId) }));
@@ -71,6 +71,7 @@ export function makeCallCommand(): Command {
       }
 
       if(opts.setActive) {
+        ctx.config.as.isdAsId = opts.isdAsId;
         ctx.config.as.asRegistryId = registryId;
         ctx.config.as.asAuthCapId = asAuthCapId;
         ctx.config.as.interfaces = [];
