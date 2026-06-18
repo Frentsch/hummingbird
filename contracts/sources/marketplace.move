@@ -6,6 +6,8 @@ module hummingbird::marketplace {
     use sui::coin::{Self, Coin};
     use sui::object_bag::{Self, ObjectBag};
     use sui::event;
+    use sui::clock::{Self, Clock};
+    use std::option::{Self, Option};
     use hummingbird::hummingbird_asset::{Self, HummingbirdAsset};
     use hummingbird::registry::{Self, AsRegistry, AsAuthCap, Interface};
 
@@ -14,6 +16,7 @@ module hummingbird::marketplace {
     const EInvalidBandwidth: u64 = 2;
     const EInsufficientPayment: u64 = 5;
     const ENotSeller: u64 = 6;
+    const EListingNotExpired: u64 = 7;
 
     // --- Core structs ---
 
@@ -38,37 +41,6 @@ module hummingbird::marketplace {
         payment_address: address,
     }
 
-    // --- Events ---
-
-    struct ListingCreated has copy, drop {
-        listing_id: ID,
-        seller: address,
-        isd_as_id: u64,
-        interface_id: u16,
-        interface_type: u8,
-        bandwidth: u64,
-        start_time: u64,
-        exp_time: u64,
-        price: u64,
-    }
-
-    struct ListingConsumed has copy, drop {
-        listing_id: ID,
-        successor_ids: vector<ID>,
-    }
-
-    struct AssetIssued has copy, drop {
-        asset_id: ID,
-        buyer: address,
-        isd_as_id: u64,
-        interface_id: u16,
-        interface_type: u8,
-        bandwidth: u64,
-        start_time: u64,
-        exp_time: u64,
-        issuer: address,
-        total_paid: u64,
-    }
 
     // --- Interface management ---
 
@@ -104,9 +76,14 @@ module hummingbird::marketplace {
         seller_token: &SellerAuthToken,
         ctx: &mut TxContext,
     ): ID {
+        let ingress_id = hummingbird_asset::get_ingress_id(&asset);
+        let egress_id = hummingbird_asset::get_egress_id(&asset);
         assert!(
             hummingbird_asset::get_isd_as_id(&asset) == registry::interface_isd_as_id(interface)
-                && hummingbird_asset::get_interface_id(&asset) == registry::interface_id(interface),
+                && (
+                    (option::is_some(&ingress_id)&& option::extract(&mut ingress_id) == registry::interface_id(interface))
+                    ||(option::is_some(&egress_id)&& option::extract(&mut egress_id)==registry::interface_id(interface))
+                ),
             EUnauthorized
         );
         new_listing_id_and_add<COIN>(
@@ -156,11 +133,10 @@ module hummingbird::marketplace {
         let total_paid = duration * bw * listing.price;
         let isd_as_id = registry::interface_isd_as_id(interface);
         let interface_id = registry::interface_id(interface);
-        let interface_type = hummingbird_asset::get_interface_type(&listing.asset);
         let buyer = tx_context::sender(ctx);
 
         let (asset, change) = execute_payment(listing, payment, ctx);
-
+        /*
         event::emit(ListingConsumed { listing_id: parent_id, successor_ids });
         event::emit(AssetIssued {
             asset_id: object::id(&asset),
@@ -174,7 +150,7 @@ module hummingbird::marketplace {
             issuer: hummingbird_asset::get_issuer(&asset),
             total_paid,
         });
-
+        */
         (asset, change)
     }
 
@@ -217,6 +193,23 @@ module hummingbird::marketplace {
     ) {
         let asset = delist<COIN>(interface, listing_id, seller_token);
         transfer::public_transfer(asset, tx_context::sender(ctx));
+    }
+
+    // --- Admin cleanup ---
+
+    public entry fun remove_expired_listing<COIN>(
+        interface: &mut Interface,
+        listing_id: ID,
+        cap: &AsAuthCap,
+        clock: &Clock,
+    ) {
+        assert!(registry::cap_isd_as_id(cap) == registry::interface_isd_as_id(interface), EUnauthorized);
+        let AssetListing<COIN> {
+            id, interface: _, asset, price: _, seller: _,
+        } = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
+        assert!(clock::timestamp_ms(clock) >= hummingbird_asset::get_exp_time(&asset), EListingNotExpired);
+        object::delete(id);
+        hummingbird_asset::destroy(asset);
     }
 
     // --- Internal helpers ---
@@ -310,7 +303,6 @@ module hummingbird::marketplace {
         let interface_address    = object::id(interface);
         let isd_as_id    = registry::interface_isd_as_id(interface);
         let interface_id = registry::interface_id(interface);
-        let interface_type = hummingbird_asset::get_interface_type(&listing.asset);
         let bandwidth    = hummingbird_asset::get_bandwidth(&listing.asset);
         let start_time   = hummingbird_asset::get_start_time(&listing.asset);
         let exp_time     = hummingbird_asset::get_exp_time(&listing.asset);
@@ -318,11 +310,12 @@ module hummingbird::marketplace {
         let seller_addr  = listing.seller.payment_address;
 
         vector::push_back(successor_ids, listing_id);
+        /*
         event::emit(ListingCreated {
             listing_id, seller: seller_addr,
             isd_as_id, interface_id, interface_type,
             bandwidth, start_time, exp_time, price,
-        });
+        });*/
         object_bag::add(registry::interface_listings(interface), listing_id, listing);
     }
 
@@ -358,16 +351,16 @@ module hummingbird::marketplace {
         let interface_address    = object::id(interface);
         let isd_as_id    = registry::interface_isd_as_id(interface);
         let interface_id = registry::interface_id(interface);
-        let interface_type = hummingbird_asset::get_interface_type(&asset);
         let bandwidth    = hummingbird_asset::get_bandwidth(&asset);
         let start_time   = hummingbird_asset::get_start_time(&asset);
         let exp_time     = hummingbird_asset::get_exp_time(&asset);
-
+        /*      
         event::emit(ListingCreated {
             listing_id, seller: seller.payment_address,
             isd_as_id, interface_id, interface_type,
             bandwidth, start_time, exp_time, price,
         });
+        */
         object_bag::add(
             registry::interface_listings(interface),
             listing_id,

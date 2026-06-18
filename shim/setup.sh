@@ -2,7 +2,7 @@
 set -e
 
 pnpm exec sui-shim call register-as \
-  --isd-as-id 1 \
+  --isd-as-id 3 \
   --set-active
 
 pnpm exec sui-shim call register-seller --set-active
@@ -12,7 +12,7 @@ pnpm exec sui-shim call create-interface \
   --save
 
 pnpm exec sui-shim call create-listing \
-  --interface-type 0 \
+  --ingress-id 1 \
   --bandwidth 100 \
   --start-time 1000 \
   --exp-time 2000 \
@@ -21,7 +21,7 @@ pnpm exec sui-shim call create-listing \
   --price 1
 
 pnpm exec sui-shim call create-listing \
-  --interface-type 1 \
+  --egress-id 2 \
   --bandwidth 100 \
   --start-time 1000 \
   --exp-time 2000 \

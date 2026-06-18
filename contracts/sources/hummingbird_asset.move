@@ -4,10 +4,9 @@ module hummingbird::hummingbird_asset {
     use sui::tx_context::{Self, TxContext};
     use sui::event;
     use std::u64;
+    use std::option::{Self,Option};
     use hummingbird::registry::{AsAuthCap, cap_isd_as_id};
 
-    const INGRESS_INTERFACE: u8 = 0;
-    const EGRESS_INTERFACE: u8 = 1;
 
     const EInvalidTimeInterval: u64 = 0;
     const EInvalidBandwidth: u64 = 1;
@@ -17,14 +16,15 @@ module hummingbird::hummingbird_asset {
     const EWrongInterfaceFuse: u64 = 4;
     const EInsufficientFuseBandwidth: u64 = 5;
     const ENonOverlappingAssets: u64 = 6;
+    const EAssetError: u64 = 8;
 
     /// Bandwidth reservation token for a single router interface.
     /// Bandwidth is in multiples of 1 kbps.
     struct HummingbirdAsset has key, store {
         id: UID,
         isd_as_id: u64,
-        interface_id: u16,
-        interface_type: u8,       // 0 = ingress, 1 = egress
+        if_ingress_id: Option<u16>,
+        if_egress_id: Option<u16>,
         bandwidth: u64,
         start_time: u64,
         exp_time: u64,
@@ -37,8 +37,7 @@ module hummingbird::hummingbird_asset {
     /// Wraps an ingress+egress pair sent to the AS for data-plane key delivery.
     struct RedeemRequest has key {
         id: UID,
-        ingress_asset: HummingbirdAsset,
-        egress_asset: HummingbirdAsset,
+        ingress_egress_asset: HummingbirdAsset,
         public_key: vector<u8>,
         buyer: address,
     }
@@ -47,7 +46,8 @@ module hummingbird::hummingbird_asset {
     struct Reservation has key, store {
         id: UID,
         isd_as_id: u64,
-        interface_id: u16,
+        ingress_id: u16,
+        egress_id: u16,
         start_time: u64,
         end_time: u64,
         bandwidth: u64,
@@ -72,8 +72,8 @@ module hummingbird::hummingbird_asset {
     // --- Getters ---
 
     public fun get_isd_as_id(a: &HummingbirdAsset): u64 { a.isd_as_id }
-    public fun get_interface_id(a: &HummingbirdAsset): u16 { a.interface_id }
-    public fun get_interface_type(a: &HummingbirdAsset): u8 { a.interface_type }
+    public fun get_ingress_id(a: &HummingbirdAsset): Option<u16> { a.if_ingress_id }
+    public fun get_egress_id(a: &HummingbirdAsset): Option<u16> { a.if_egress_id }
     public fun get_bandwidth(a: &HummingbirdAsset): u64 { a.bandwidth }
     public fun get_start_time(a: &HummingbirdAsset): u64 { a.start_time }
     public fun get_exp_time(a: &HummingbirdAsset): u64 { a.exp_time }
@@ -87,8 +87,8 @@ module hummingbird::hummingbird_asset {
     public fun issue(
         cap: &AsAuthCap,
         isd_as_id: u64,
-        interface_id: u16,
-        interface_type: u8,
+        if_ingress_id: Option<u16>,
+        if_egress_id: Option<u16>,
         bandwidth: u64,
         start_time: u64,
         exp_time: u64,
@@ -106,11 +106,12 @@ module hummingbird::hummingbird_asset {
                 && (exp_time - start_time) % time_granularity == 0,
             EInvalidTimeGranularity
         );
+        assert!(option::is_some(&if_ingress_id) || option::is_some(&if_egress_id), EAssetError);
         HummingbirdAsset {
             id: object::new(ctx),
             isd_as_id,
-            interface_id,
-            interface_type,
+            if_ingress_id,
+            if_egress_id,
             bandwidth,
             start_time,
             exp_time,
@@ -123,7 +124,7 @@ module hummingbird::hummingbird_asset {
 
     public fun destroy(a: HummingbirdAsset) {
         let HummingbirdAsset {
-            id, isd_as_id: _, interface_id: _, interface_type: _,
+            id, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: _, start_time: _, exp_time: _,
             time_granularity: _, 
             time_min_duration: _, min_bandwidth: _, issuer: _,
@@ -151,8 +152,8 @@ module hummingbird::hummingbird_asset {
         let right = HummingbirdAsset {
             id: object::new(ctx),
             isd_as_id: a.isd_as_id,
-            interface_id: a.interface_id,
-            interface_type: a.interface_type,
+            if_ingress_id: a.if_ingress_id,
+            if_egress_id: a.if_egress_id,
             bandwidth: a.bandwidth,
             start_time: split_time,
             exp_time: a.exp_time,
@@ -180,8 +181,8 @@ module hummingbird::hummingbird_asset {
         let upper = HummingbirdAsset {
             id: object::new(ctx),
             isd_as_id: a.isd_as_id,
-            interface_id: a.interface_id,
-            interface_type: a.interface_type,
+            if_ingress_id: a.if_ingress_id,
+            if_egress_id: a.if_egress_id,
             bandwidth: a.bandwidth - split_bw,
             start_time: a.start_time,
             exp_time: a.exp_time,
@@ -209,7 +210,7 @@ module hummingbird::hummingbird_asset {
             EInsufficientFuseBandwidth
         );
         let HummingbirdAsset {
-            id: sid, isd_as_id: _, interface_id: _, interface_type: _,
+            id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
             time_granularity: _, time_min_duration: _,
             min_bandwidth: smin, issuer: _,
@@ -226,7 +227,7 @@ module hummingbird::hummingbird_asset {
         assert!(is_same_interface(first, &second), EWrongInterfaceFuse);
         assert!(are_overlapping(first, &second), ENonOverlappingAssets);
         let HummingbirdAsset {
-            id: sid, isd_as_id: _, interface_id: _, interface_type: _,
+            id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
             time_granularity: _, time_min_duration: _, min_bandwidth: smin, issuer: _,
         } = second;
@@ -249,17 +250,18 @@ module hummingbird::hummingbird_asset {
         assert!(
             ingress_asset.isd_as_id == egress_asset.isd_as_id
                 && ingress_asset.issuer == egress_asset.issuer
-                && ingress_asset.interface_type == INGRESS_INTERFACE
-                && egress_asset.interface_type == EGRESS_INTERFACE
-                && ingress_asset.start_time < egress_asset.exp_time
-                && ingress_asset.exp_time > egress_asset.start_time,
+                && option::is_some(&ingress_asset.if_ingress_id)
+                && option::is_some(&egress_asset.if_egress_id)
+                && ingress_asset.start_time == egress_asset.start_time
+                && ingress_asset.exp_time == egress_asset.exp_time
+                && ingress_asset.bandwidth == egress_asset.bandwidth,
             EAssetMismatch
         );
+        ingress_asset.if_egress_id = egress_asset.if_egress_id;
         let issuer_addr = ingress_asset.issuer;
         let req = RedeemRequest {
             id: object::new(ctx),
-            ingress_asset,
-            egress_asset,
+            ingress_egress_asset: ingress_asset,
             public_key,
             buyer: tx_context::sender(ctx),
         };
@@ -268,6 +270,34 @@ module hummingbird::hummingbird_asset {
             issuer: issuer_addr,
         });
         transfer::transfer(req, issuer_addr);
+        destroy(egress_asset);
+    }
+
+    public fun redeem_pair(
+        ingress_egress_asset: HummingbirdAsset,
+        public_key: vector<u8>,
+        ctx: &mut TxContext,
+    ){
+        assert!(
+            option::is_some(&ingress_egress_asset.if_ingress_id)
+            && option::is_some(&ingress_egress_asset.if_egress_id),
+            EAssetMismatch);
+        assert!(ingress_egress_asset.bandwidth>=ingress_egress_asset.min_bandwidth, EInvalidBandwidth);
+        assert!(ingress_egress_asset.exp_time - ingress_egress_asset.start_time>=ingress_egress_asset.time_min_duration, EInvalidTimeInterval);
+            
+        let issuer_addr = ingress_egress_asset.issuer;
+        let req = RedeemRequest {
+            id: object::new(ctx),
+            ingress_egress_asset,
+            public_key,
+            buyer: tx_context::sender(ctx),
+        };
+        event::emit(RedeemRequestReceived {
+            redeem_request_id: object::id(&req),
+            issuer: issuer_addr,
+        });
+        transfer::transfer(req, issuer_addr);
+        
     }
 
     /// AS delivers encrypted data-plane keys, destroys both assets, and transfers a Reservation to the buyer.
@@ -280,41 +310,38 @@ module hummingbird::hummingbird_asset {
         ctx: &mut TxContext,
     ) {
         let redeem_request_id = object::id(&req);
-        let RedeemRequest { id: wid, ingress_asset, egress_asset, public_key, buyer } = req;
-        let isd_as_id = ingress_asset.isd_as_id;
-        let interface_id = ingress_asset.interface_id;
-        let start_time = u64::max(ingress_asset.start_time, egress_asset.start_time);
-        let end_time = u64::min(ingress_asset.exp_time, egress_asset.exp_time);
-        let bandwidth = u64::min(ingress_asset.bandwidth, egress_asset.bandwidth);
+        let RedeemRequest { id: wid, ingress_egress_asset, public_key, buyer } = req;
+        let isd_as_id = ingress_egress_asset.isd_as_id;
         object::delete(wid);
-        destroy(ingress_asset);
-        destroy(egress_asset);
-        let reservation = Reservation {
+        /*let reservation = Reservation {
             id: object::new(ctx),
-            isd_as_id,
-            interface_id,
-            start_time,
-            end_time,
-            bandwidth,
+            isd_as_id: isd_as_id,
+            ingress_id: option::extract(&mut ingress_egress_asset.if_ingress_id),
+            egress_id: option::extract(&mut ingress_egress_asset.if_egress_id),
+            start_time: ingress_egress_asset.start_time,
+            end_time: ingress_egress_asset.exp_time,
+            bandwidth: ingress_egress_asset.bandwidth,
             encrypted_reservation: encrypted_reservation,
-        };
+        };*/
+        destroy(ingress_egress_asset);
         event::emit(ReservationDelivered { 
             isd_as_id, 
             redeem_request_id, 
             public_key, 
-            encrypted_reservation: reservation.encrypted_reservation,
+            encrypted_reservation,
             res_id,
             bw_rounded,
             bw_dataplane_encoding });
-        transfer::transfer(reservation, buyer);
+        //TODO decide if Reservation recepit necessary or not
+        //transfer::transfer(reservation, buyer);
     }
 
     // --- Private helpers ---
 
     fun is_same_interface(a: &HummingbirdAsset, b: &HummingbirdAsset): bool {
         a.isd_as_id == b.isd_as_id
-            && a.interface_id == b.interface_id
-            && a.interface_type == b.interface_type
+            && a.if_ingress_id == b.if_ingress_id
+            && a.if_egress_id == b.if_egress_id
             && a.issuer == b.issuer
     }
 

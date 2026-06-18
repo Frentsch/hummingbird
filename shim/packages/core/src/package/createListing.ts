@@ -11,8 +11,8 @@ export interface CreateListingParams {
   /** ISD-AS ID (u64) — read from the Interface object before calling. */
   isdAsId: bigint;
   /** Interface ID (u16) — read from the Interface object before calling. */
-  interfaceId: number;
-  interfaceType: number;
+  ingressId: number | undefined;
+  egressId: number | undefined;
   /** Total bandwidth in kbps (u64). */
   bandwidth: bigint;
   /** Listing start time in ms since epoch (u64). */
@@ -46,8 +46,8 @@ export function buildCreateListing(params: CreateListingParams): Transaction {
     arguments: [
       tx.object(params.asAuthCapId),
       tx.pure.u64(params.isdAsId),
-      tx.pure.u16(params.interfaceId),
-      tx.pure.u8(params.interfaceType),
+      tx.pure.option('u16', params.ingressId),
+      tx.pure.option('u16', params.egressId),
       tx.pure.u64(params.bandwidth),
       tx.pure.u64(params.startTime),
       tx.pure.u64(params.expTime),

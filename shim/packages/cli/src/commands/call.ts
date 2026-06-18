@@ -26,6 +26,7 @@ import { deriveObjectID, isValidSuiObjectId } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import { makeCtx, runTx } from '../ctx.js';
 import { getDefaultAddress } from './keys.js';
+import { assert } from 'console';
 
 function configOpt(cmd: Command): Command {
   return cmd.option('-c, --config <path>', 'Path to shim.toml config file', 'shim.toml');
@@ -57,7 +58,7 @@ export function makeCallCommand(): Command {
         .description('Register this signer as an AS in the global registry')
         .option('--global-registry-id <id>', 'Global registry shared object ID (fallback: package.globalRegistryId in config)')
         .option('--set-active','Set the created registry as the default for further commands')
-        .requiredOption('--isd-as-id <n>', 'ISD-AS identifier (integer)', parseInt),
+        .requiredOption('--isd-as-id <n>', 'ISD-AS identifier (integer)'),
     ).action(async (opts: { config: string; globalRegistryId?: string;setActive: boolean, isdAsId: string }) => {
       const ctx = await makeCtx(opts.config);
       const globalRegistryId = resolve(opts.globalRegistryId, ctx.config.package?.globalRegistryId, 'global-registry-id');
@@ -145,8 +146,8 @@ export function makeCallCommand(): Command {
       configOpt(
         new Command('create-listing')
           .description('Issue a HummingbirdAsset and create a listing on an Interface')
-          .option('--interface-object-id <id>', 'Interface object ID')
-          .requiredOption('--interface-type <n>', 'Interface Type (0=Ingress, 1=Egress)', parseInt)
+          .option('--ingress-id <id>', 'Ingress Id', parseInt)
+          .option('--egress-id <id>', 'Egress Id', parseInt)
           .option('--as-auth-cap-id <id>', 'AsAuthCap object ID (fallback: as.asAuthCapId in config)')
           .option('--seller-auth-token-id <id>', 'SellerAuthToken object ID (fallback: as.sellerAuthTokenId in config)')
           .requiredOption('--bandwidth <n>', 'Total bandwidth in kb/s (u64)', parseInt)
@@ -160,8 +161,8 @@ export function makeCallCommand(): Command {
     ).action(
       async (opts: {
         config: string;
-        interfaceObjectId?: string;
-        interfaceType: number;
+        ingressId?: number;
+        egressId?: number;
         asAuthCapId?: string;
         sellerAuthTokenId?: string;
         bandwidth: number;
@@ -176,11 +177,22 @@ export function makeCallCommand(): Command {
         const ctx = await makeCtx(opts.config);
         const asAuthCapId = resolve(opts.asAuthCapId, ctx.config.as?.asAuthCapId, 'as-auth-cap-id');
         const sellerAuthTokenId = resolve(opts.sellerAuthTokenId, ctx.config.as?.sellerAuthTokenId, 'seller-auth-token-id');
-        const interfaceObjectId = resolve(opts.interfaceObjectId, ctx.config.as?.interfaces ? ctx.config.as.interfaces[0] : undefined, 'interface-object-id');
-
+        if(!(opts.ingressId || opts.egressId || (ctx.config.as && ctx.config.as.interfaces && ctx.config.as.interfaces.length>0))){
+          console.log("Must specify one of ingress-id, egress-id or set ingressObjectId in config");
+          return;
+        }
+        const ingressObjectId = opts.ingressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U16.serialize(opts.ingressId).toBytes()) : undefined;
+        const egressObjectId = opts.egressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U16.serialize(opts.egressId).toBytes()) : undefined;
+        
+        const defaultInterfaceObjectId = ctx.config.as?.interfaces ? ctx.config.as.interfaces[0] : undefined;
+        const interfaceObjectId = ingressObjectId ?? (egressObjectId ?? defaultInterfaceObjectId);
+        console.log(ingressObjectId);
+        console.log(egressObjectId);
+        console.log(interfaceObjectId);
+        assert(interfaceObjectId, "No valid interface found");
         // Fetch interface object to get isd_as_id and interface_id.
         const interfaceObj = await ctx.client.getObject({
-          objectId: interfaceObjectId,
+          objectId: interfaceObjectId!,
           include: { json: true },
         });
         const interfaceFields = getObjectFields(interfaceObj);
@@ -191,12 +203,12 @@ export function makeCallCommand(): Command {
           ctx,
           buildCreateListing({
             packageId: ctx.config.package.id,
-            interfaceObjectId,
-            interfaceType: opts.interfaceType,
+            interfaceObjectId: interfaceObjectId!,
+            ingressId: opts.ingressId,
+            egressId: opts.egressId,
             asAuthCapId,
             sellerAuthTokenId,
             isdAsId,
-            interfaceId,
             bandwidth: BigInt(opts.bandwidth),
             startTime: BigInt(opts.startTime),
             expTime: BigInt(opts.expTime),

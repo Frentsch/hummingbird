@@ -185,8 +185,8 @@ export class EventListener {
 
     // In the GraphQL JSON representation, nested structs have no `fields` wrapper.
     // UID values are canonical address strings (not { id: { id: "0x..." } }).
-    const ingressFields = json['ingress_asset'] as Record<string, unknown>;
-    const egressFields  = json['egress_asset']  as Record<string, unknown>;
+    console.log(json);
+    const assetFields = json['ingress_egress_asset'] as Record<string, unknown>;
 
     // public_key is vector<u8>, serialized as a Base64 string in GraphQL JSON.
     const pkRaw = json['public_key'];
@@ -203,13 +203,13 @@ export class EventListener {
       eventSeq,
       requestId,
       requestObjectId: redeemRequestObjectId,
-      ingressAssetId: Number(ingressFields['interface_id']).toString(16),
-      egressAssetId:  Number(egressFields['interface_id']).toString(16),
+      ingressAssetId: Number(assetFields['if_ingress_id']).toString(16),
+      egressAssetId:  Number(assetFields['if_egress_id']).toString(16),
       publicKey,
       buyer: json['buyer'] as string,
-      bandwidth: BigInt(ingressFields['bandwidth'] as string),
-      startTime: BigInt(ingressFields['start_time'] as string),
-      expTime:   BigInt(ingressFields['exp_time']   as string),
+      bandwidth: BigInt(assetFields['bandwidth'] as string),
+      startTime: BigInt(assetFields['start_time'] as string),
+      expTime:   BigInt(assetFields['exp_time']   as string),
     });
   }
 

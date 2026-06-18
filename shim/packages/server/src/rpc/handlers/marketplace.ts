@@ -7,7 +7,6 @@ import {
   SearchAssetsRequest,
   SearchAssetsResponse,
   Asset,
-  AssetType,
   BuyAssetsResponse,
   BoughtAsset,
   RedeemAssetResponse,
@@ -45,13 +44,13 @@ import {
 import type { ReservationFilter } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
+import { assert } from 'node:console';
 
 const API_MAJOR_VERSION = 0n;
 const API_MINOR_VERSION = 1n;
 
 function filterAsset(asset: Asset, req: SearchAssetsRequest): boolean {
   if (req.ia              !== undefined && asset.ia          !== req.ia)              return false;
-  if (req.assetType       !== undefined && asset.assetType   !== req.assetType)       return false;
   if (req.ifIdIngress     !== undefined && asset.ifIdIngress !== req.ifIdIngress)     return false;
   if (req.ifIdEgress      !== undefined && asset.ifIdEgress  !== req.ifIdEgress)      return false;
   if (req.minRequiredBw   !== undefined && asset.bw          <  req.minRequiredBw)   return false;
@@ -83,6 +82,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         apiMajorVersion: API_MAJOR_VERSION,
         apiMinorVersion: API_MINOR_VERSION,
         currency: DEFAULT_COIN_TYPE,
+        maxStatisticsGranularity: 1;
       });
     },
 
@@ -94,9 +94,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         throw new ConnectError('At least one of if_id_ingress or if_id_egress must be set', Code.InvalidArgument);
       }
       if(req.bandwidth<=0) throw new ConnectError('Bandwidth must be at least 1', Code.FailedPrecondition);
-      if(!req.startAt || !req.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
+      if(!req.startsAt || !req.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
       if(req.bandwidthMin<=req.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
-      if(req.timeMinDuration<=req.stopsAt.seconds-req.startAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
+      if(req.timeMinDuration<=req.stopsAt.seconds-req.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
       try{
       //create as registry if not existing
@@ -139,24 +139,24 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         }
       }
 
-      const start = req.startAt ? Number(req.startAt.seconds)  : Date.now();
+      const start = req.startsAt ? Number(req.startsAt.seconds)  : Date.now();
       const stop = req.stopsAt ? Number(req.stopsAt.seconds) : start + 3600;
 
-      const interfaceObj = await state.client.getObject({
+      /*const interfaceObj = await state.client.getObject({
         objectId: interfaceObjectId,
         include: { json: true },
-      });
-      const interfaceFields = getObjectFields(interfaceObj);
-      const interfaceId = interfaceFields.interface_id as number;
+      });*/
+      //const interfaceFields = getObjectFields(interfaceObj);
+      //const interfaceId = interfaceFields.interface_id as number;
 
       const tx = buildCreateListing({
         packageId: state.packageId,
         interfaceObjectId,
-        interfaceType: req.ifIdIngress ? 0: 1,
+        ingressId: req.ifIdIngress,
+        egressId: req.ifIdEgress,
         asAuthCapId: state.asAuthCapId,
         sellerAuthTokenId: state.sellerAuthTokenId,
-        isdAsId,
-        interfaceId,
+        isdAsId: BigInt(isdAsId),
         bandwidth: req.bandwidth as bigint,
         startTime: BigInt(Math.floor(start)),
         expTime: BigInt(Math.floor(stop)),
@@ -176,11 +176,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       return new PublishAssetResponse({ assetId: BigInt(created).toString() });
     }catch(error){
       console.log(error);
-      return new ConnectError("error");
+      throw new ConnectError("error");
     }
     },
 
     async searchAssets(_req, _ctx) {
+      console.log("start asset search");
       if (_req.owned) {
         const result = await state.client.listOwnedObjects({
           owner: state.signer.getPublicKey().toSuiAddress(),
@@ -193,7 +194,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           .map((obj: any) => SuiToRpcAsset(obj))
           .filter((asset: Asset) => filterAsset(asset, _req));
 
-        return new SearchAssetsResponse({ owned: _req.owned, assets: ownedAssets });
+        return new SearchAssetsResponse({assets: ownedAssets });
       } else {
         function ListingsToAssets(listings: any[]) {
           return listings
@@ -227,7 +228,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             console.log(listingObjs);
 
             const assets: Asset[] = ListingsToAssets(listingObjs);
-            return new SearchAssetsResponse({ owned: _req.owned, assets });
+            return new SearchAssetsResponse({ assets });
           } else {
             try {
               const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
@@ -237,8 +238,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
                 const ls = await getAllListingsOf(interfaceId, state.client);
                 listings.push(...ls);
               }
-
-              return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(listings) });
+              console.log(listings);
+              return new SearchAssetsResponse({ assets: ListingsToAssets(listings) });
             } catch (error) {
               console.log(error);
             }
@@ -255,10 +256,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
                 result.push(...listings);
               }
             }
+            console.log(ListingsToAssets(result));
           } catch (error) {
             console.log(error);
           }
-          return new SearchAssetsResponse({ owned: _req.owned, assets: ListingsToAssets(result) });
+          console.log(result);
+          return new SearchAssetsResponse({ assets: ListingsToAssets(result) });
         }
       }
     },
@@ -329,7 +332,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         }
 
         tx.mergeCoins(tx.gas, [paymentCoin]);
-
+        
         const result = await executeTransaction(state.client, state.signer, tx);
         console.log(result);
 
@@ -341,70 +344,86 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         return new BuyAssetsResponse({ assets: bought, cost });
       } catch (error) {
         console.log(error);
+        if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
+            const {abortCode} = error.executionError.MoveAbort;
+            const MARKET_ERRORS: Record<string, string> = {
+              '1': "Invalid interval",
+              '2': 'Invalid Bandwidth',
+              '5': 'Insufficient Balance',
+            }
+            throw new ConnectError(MARKET_ERRORS[abortCode]??"Failed transaction on Marketplace", Code.InvalidArgument);
+          }
         throw error;
       }
     },
 
     async redeemAsset(req, _ctx) {
-      const ingressId = '0x' + BigInt(req.ingressAssetId).toString(16).padStart(64, '0');
-      const egressId = '0x' + BigInt(req.egressAssetId).toString(16).padStart(64, '0');
-      console.log(ingressId);
-      console.log(egressId);
-      try {
-        const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
-        const ingressFields = getObjectFields(ingressObj);
-        const ia          = BigInt(ingressFields['isd_as_id'] as string);
-        const ingressIfId = ingressFields['interface_id'] as number;
-        const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
-        const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
+      if(req.ifPairAssetId){
+        throw new ConnectError("IfPairAssetId not implemented");
+      }else{
+        if(!(req.ingressAssetId && req.egressAssetId)) throw new ConnectError("Must specify ingress and egress Id, or interface pair id", Code.FailedPrecondition);    
+        const ingressId = '0x' + BigInt(req.ingressAssetId).toString(16).padStart(64, '0');
+        const egressId = '0x' + BigInt(req.egressAssetId).toString(16).padStart(64, '0');
+        console.log(ingressId);
+        console.log(egressId);
+        try {
+          const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
+          const ingressFields = getObjectFields(ingressObj);
+          const ia          = BigInt(ingressFields['isd_as_id'] as string);
+          const ingressIfId = ingressFields['if_ingress_id'] as number;
+          const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
+          const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
 
-        const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
-        const egressFields = getObjectFields(egressObj);
-        const egressIfId  = egressFields['interface_id'] as number;
+          const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
+          const egressFields = getObjectFields(egressObj);
+          const egressIfId  = egressFields['if_egress_id'] as number;
+          console.log(ingressObj);
+          console.log(egressObj);
+          if(!(ingressIfId&&egressIfId)) throw new ConnectError("Asset Mismatch. Ingress asset must have ingress id set. Egress asset must have egress id set", Code.FailedPrecondition);
+          const publicKey = new Uint8Array(32);
 
-        const publicKey = new Uint8Array(32);
+          const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
+          const result = await executeTransaction(state.client, state.signer, tx);
 
-        const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
-        const result = await executeTransaction(state.client, state.signer, tx);
+          const redeemRequestObjectId = extractCreatedObjectId(
+            result,
+            getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
+          );
 
-        const redeemRequestObjectId = extractCreatedObjectId(
-          result,
-          getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
-        );
+          const delivery = await state.deliveryListener.waitForDelivery(
+            redeemRequestObjectId,
+            state.packageId,
+            state.config.redemption.timeoutSecs * 1000,
+          );
+          const ak = new TextDecoder().decode(delivery.encryptedReservation);
+          console.log(ak);
+          console.log(delivery.resId);
 
-        const delivery = await state.deliveryListener.waitForDelivery(
-          redeemRequestObjectId,
-          state.packageId,
-          state.config.redemption.timeoutSecs * 1000,
-        );
-        const ak = new TextDecoder().decode(delivery.encryptedReservation);
-        console.log(ak);
-        console.log(delivery.resId);
+          insertReservation(state.db, {
+            resId:     delivery.resId,
+            ia,
+            ingressId: ingressIfId,
+            egressId:  egressIfId,
+            bw:        delivery.bwRounded,
+            startsAt,
+            stopsAt,
+            ak,
+          });
 
-        insertReservation(state.db, {
-          resId:     delivery.resId,
-          ia,
-          ingressId: ingressIfId,
-          egressId:  egressIfId,
-          bw:        delivery.bwRounded,
-          startsAt,
-          stopsAt,
-          ak,
-        });
-
-        return new RedeemAssetResponse({
-          ak,
-          resId: delivery.resId,
-          bwRounded: delivery.bwRounded,
-          bwDataplaneEncoding: delivery.bwDataplaneEncoding,
-        });
-      } catch (err) {
-        console.log(err);
-        if (err instanceof DeliveryTimeoutError) {
-          throw new ConnectError('AS did not deliver reservation in time', Code.DeadlineExceeded);
+          return new RedeemAssetResponse({
+            ak,
+            resId: delivery.resId,
+            bwRounded: delivery.bwRounded,
+            bwDataplaneEncoding: delivery.bwDataplaneEncoding,
+          });
+        } catch (err) {
+          console.log(err);
+          if (err instanceof DeliveryTimeoutError) {
+            throw new ConnectError('AS did not deliver reservation in time', Code.DeadlineExceeded);
+          }
+          throw err;
         }
-        throw err;
-      }
+    }
     },
 
     fetchReservations(req, _ctx) {
