@@ -20,6 +20,7 @@ import {
   openReservationDb,
   insertReservation,
   getObjectFields,
+  isdAsIdToU64,
 } from '@sui-shim/core';
 import type { SuiClientTypes } from '@mysten/sui/client';
 import { deriveObjectID, isValidSuiObjectId } from '@mysten/sui/utils';
@@ -58,11 +59,11 @@ export function makeCallCommand(): Command {
         .description('Register this signer as an AS in the global registry')
         .option('--global-registry-id <id>', 'Global registry shared object ID (fallback: package.globalRegistryId in config)')
         .option('--set-active','Set the created registry as the default for further commands')
-        .requiredOption('--isd-as-id <n>', 'ISD-AS identifier (integer)'),
+        .requiredOption('--isd-as-id <ia>', 'ISD-AS identifier (e.g. 1-ff00:0:1)'),
     ).action(async (opts: { config: string; globalRegistryId?: string;setActive: boolean, isdAsId: string }) => {
       const ctx = await makeCtx(opts.config);
       const globalRegistryId = resolve(opts.globalRegistryId, ctx.config.package?.globalRegistryId, 'global-registry-id');
-      const result = await runTx(ctx, buildRegisterAs({ packageId: ctx.config.package.id, globalRegistryId, isdAsId: BigInt(opts.isdAsId) }));
+      const result = await runTx(ctx, buildRegisterAs({ packageId: ctx.config.package.id, globalRegistryId, isdAsId: isdAsIdToU64(opts.isdAsId) }));
       const registryId = extractCreatedObjectId(result, getObjectType(ctx.config.package.id,"registry","AsRegistry"));
       const asAuthCapId = extractCreatedObjectId(result, getObjectType(ctx.config.package.id, "registry", "AsAuthCap"));
       if(registryId){
@@ -411,16 +412,16 @@ export function makeCallCommand(): Command {
     configOpt(
       new Command('list-listings')
         .description('List all listings for a given AS interface')
-        .requiredOption('--isd-as-id <n>', 'ISD-AS identifier (u64)', parseInt)
+        .requiredOption('--isd-as-id <ia>', 'ISD-AS identifier (e.g. 1-ff00:0:1)')
         .requiredOption('--interface-id <n>', 'Interface identifier (u16)', parseInt),
-    ).action(async (opts: { config: string; isdAsId: number; interfaceId: number }) => {
+    ).action(async (opts: { config: string; isdAsId: string; interfaceId: number }) => {
       const ctx = await makeCtx(opts.config);
       const globalRegistryId = resolve(undefined, ctx.config.package?.globalRegistryId, 'global-registry-id');
 
       const asRegistryId = deriveObjectID(
         globalRegistryId,
         'u64',
-        bcs.U64.serialize(BigInt(opts.isdAsId)).toBytes(),
+        bcs.U64.serialize(isdAsIdToU64(opts.isdAsId)).toBytes(),
       );
       console.log(`[debug] asRegistryId: ${asRegistryId}`);
 

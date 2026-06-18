@@ -17,7 +17,7 @@ id = "0x59dd2d56965d93bc28b63cd86f27e14ceda2ef84a019880cb65956b433c447af"
 globalRegistryId = "0xec2b69a0dce72a6b80223795769564d6512668a1f4c767da0ebb35a096a76b25"
 
 [as]
-isdAsId = "3"
+isdAsId = "0-0:0:3"
 asRegistryId = "0xeaed43dad8e4a77e234b774e196ab39bc3b395a787b9dd30d22cf51b4fce0ccf"
 asAuthCapId = "0x92c8447d9618a4b2f2f7135759a371dcef9bda2eb4a84d26f80cc46ac1a791ac"
 sellerAuthTokenId = "0xec8a048d9ef7d875d4a2c7ae05c5bd84fdee97bab98288d01d56954c154087fd"

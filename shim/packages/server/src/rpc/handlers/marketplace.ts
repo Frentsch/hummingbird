@@ -40,6 +40,7 @@ import {
   buildRegisterAs,
   buildCreateInterface,
   saveConfig,
+  isdAsIdToU64,
 } from '@sui-shim/core';
 import type { ReservationFilter } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
@@ -82,7 +83,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         apiMajorVersion: API_MAJOR_VERSION,
         apiMinorVersion: API_MINOR_VERSION,
         currency: DEFAULT_COIN_TYPE,
-        maxStatisticsGranularity: 1;
+        maxStatisticsGranularity: 1n,
       });
     },
 
@@ -95,19 +96,19 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       }
       if(req.bandwidth<=0) throw new ConnectError('Bandwidth must be at least 1', Code.FailedPrecondition);
       if(!req.startsAt || !req.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
-      if(req.bandwidthMin<=req.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
-      if(req.timeMinDuration<=req.stopsAt.seconds-req.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
+      if(req.bandwidthMin>req.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
+      if(req.timeMinDuration>req.stopsAt.seconds-req.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
       try{
       //create as registry if not existing
-      const derivedAsRegistryId = deriveObjectID(state.config.package.globalRegistryId, 'u64', bcs.U64.serialize(isdAsId).toBytes());
+      const derivedAsRegistryId = deriveObjectID(state.config.package.globalRegistryId, 'u64', bcs.U64.serialize(isdAsIdToU64(isdAsId)).toBytes());
       const { objects: [asRegistryResult] } = await state.client.getObjects({ objectIds: [derivedAsRegistryId] });
       if (asRegistryResult instanceof Error) {
         const result = await executeTransaction(state.client, state.signer,
           buildRegisterAs({
             packageId: state.config.package.id,
             globalRegistryId: state.config.package.globalRegistryId,
-            isdAsId: BigInt(isdAsId)
+            isdAsId: isdAsIdToU64(isdAsId)
           })
         );
         state.config.as.asAuthCapId = extractCreatedObjectId(result, getObjectType(state.config.package.id, "registry", "AsAuthCap"));
@@ -156,7 +157,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         egressId: req.ifIdEgress,
         asAuthCapId: state.asAuthCapId,
         sellerAuthTokenId: state.sellerAuthTokenId,
-        isdAsId: BigInt(isdAsId),
+        isdAsId: isdAsIdToU64(isdAsId),
         bandwidth: req.bandwidth as bigint,
         startTime: BigInt(Math.floor(start)),
         expTime: BigInt(Math.floor(stop)),
