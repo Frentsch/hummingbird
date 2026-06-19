@@ -39,6 +39,7 @@ import {
   queryReservations,
   buildRegisterAs,
   buildCreateInterface,
+  buildRegisterSeller,
   saveConfig,
   isdAsIdToU64,
 } from '@sui-shim/core';
@@ -139,6 +140,27 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           }else throw error;
         }
       }
+
+      //create seller auth token if not exists
+      const sellerAuthTokenType = getObjectType(state.config.package.id, 'marketplace', 'SellerAuthToken');
+      const { objects: sellerTokens } = await state.client.listOwnedObjects({
+        owner: state.signer.getPublicKey().toSuiAddress(),
+        type: sellerAuthTokenType,
+      });
+      if (sellerTokens.length === 0) {
+        const sellerResult = await executeTransaction(state.client, state.signer,
+          buildRegisterSeller({
+            packageId: state.config.package.id,
+            paymentAddress: state.signer.getPublicKey().toSuiAddress(),
+          })
+        );
+        const sellerAuthTokenId = extractCreatedObjectId(sellerResult, sellerAuthTokenType);
+        state.sellerAuthTokenId = sellerAuthTokenId;
+        state.config.as.sellerAuthTokenId = sellerAuthTokenId;
+        await saveConfig(state.config);
+      }
+
+
 
       const start = req.startsAt ? Number(req.startsAt.seconds)  : Date.now();
       const stop = req.stopsAt ? Number(req.stopsAt.seconds) : start + 3600;
