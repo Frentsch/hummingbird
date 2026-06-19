@@ -24,3 +24,6 @@ export type { DeliverReservationParams } from './deliverReservation.js';
 
 export { buildDelistAndTake } from './delistAndTake.js';
 export type { DelistAndTakeParams } from './delistAndTake.js';
+
+export { buildRegisterAsFor } from './registerAsFor.js';
+export type { RegisterAsForParams } from './registerAsFor.js';

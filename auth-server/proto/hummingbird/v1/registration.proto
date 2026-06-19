@@ -1,0 +1,59 @@
+// Copyright 2026 ETH Zurich
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option go_package = "github.com/scionproto/scion/hummingbird/auth-server/gen/hummingbird/v1;hummingbird";
+
+package proto.hummingbird.v1;
+
+import "crypto/v1/signed.proto";
+
+// Internal shim → auth-server API. Mirrors the public AccountService in
+// account.proto; the only structural difference is that CreateChallengeRequest
+// carries the sui_address that the shim injects from its own keystore.
+service ASRegistrationService {
+    rpc CreateChallenge(CreateChallengeRequest) returns (CreateChallengeResponse) {}
+    rpc RegisterAS(RegisterASRequest) returns (RegisterASResponse) {}
+}
+
+message CreateChallengeRequest {
+    // ISD-AS identifier of the registering AS.
+    uint64 ia = 1;
+    // Sui address that will receive the AsAuthCap on success.
+    // Injected by the shim from its own keystore; included in the signed
+    // payload so the AS explicitly authorises the transfer to this address.
+    string sui_address = 2;
+}
+
+// Flat challenge — mirrors account.proto CreateChallengeResponse.
+message CreateChallengeResponse {
+    string id = 1;
+    bytes value = 2;
+}
+
+// Mirrors account.proto RegisterASRequest, plus the HTTP authority the AS used
+// when signing (needed to reproduce the associated-data for ECDSA verification).
+message RegisterASRequest {
+    string id = 1;
+    proto.crypto.v1.SignedMessage signed_challenge = 2;
+    // HTTP :authority header from the original AS → shim connection.
+    // Included in the ECDSA signature as associated data.
+    string authority = 3;
+}
+
+// Mirrors account.proto RegisterASResponse exactly.
+message RegisterASResponse {
+    string auth_cap_id = 1;
+}

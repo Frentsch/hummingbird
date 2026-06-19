@@ -51,6 +51,7 @@ export async function startServer(configPath: string): Promise<void> {
     deliveryListener,
     pendingRedemptions: new Map(),
     db,
+    authServerUrl: config.authServer?.url,
   };
 
   const myAddress = signer.getPublicKey().toSuiAddress();

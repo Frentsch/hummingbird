@@ -13,13 +13,13 @@ token = "some-bearer-token"
 port = 9091
 
 [package]
-id = "0x59dd2d56965d93bc28b63cd86f27e14ceda2ef84a019880cb65956b433c447af"
-globalRegistryId = "0xec2b69a0dce72a6b80223795769564d6512668a1f4c767da0ebb35a096a76b25"
+id = "0xa8123235edb6079b5f3aca99c9007f71a5497423f62e959bb8ee57cb5cd43495"
+globalRegistryId = "0x791943a824197a56f642d638e1671576a04c8229305ed9b2cf0b578397596318"
 
 [as]
 isdAsId = "0-0:0:3"
 asRegistryId = "0xeaed43dad8e4a77e234b774e196ab39bc3b395a787b9dd30d22cf51b4fce0ccf"
-asAuthCapId = "0x92c8447d9618a4b2f2f7135759a371dcef9bda2eb4a84d26f80cc46ac1a791ac"
+asAuthCapId = "0x195790932235a400ce5958e337a5325d5ae9dc878487cfca9f5d563d1e735bd4"
 sellerAuthTokenId = "0xec8a048d9ef7d875d4a2c7ae05c5bd84fdee97bab98288d01d56954c154087fd"
 interfaces = [ "0x66cfd8708c083f60407b74f824239e28ebafbdaf14ad01faf95c27ee2b85fd17", "0x765c68d5c4ed4b3d882c231c17185677fa503fcc804dccf4db12ad09090fea96" ]
 
@@ -31,3 +31,6 @@ path = "./reservations.db"
 
 [transaction]
 gasBudget = 50000000
+
+[authServer]
+url = "http://localhost:9092"

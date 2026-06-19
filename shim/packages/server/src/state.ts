@@ -15,4 +15,6 @@ export interface AppState {
   deliveryListener: DeliveryListener;
   pendingRedemptions: Map<BigInt, string>;
   db: SqliteDb;
+  /** URL of the auth-server for proxying AS registration requests, or undefined if not configured. */
+  authServerUrl: string | undefined;
 }

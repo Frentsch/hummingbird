@@ -1,0 +1,19 @@
+{
+  "grpc": {
+    "port": 9092
+  },
+  "keystore": {
+    "path": "/home/user/.sui/sui_config/sui.keystore",
+    "address": "0xYOUR_ADMIN_WALLET_ADDRESS"
+  },
+  "sui": {
+    "rpcUrl": "https://fullnode.testnet.sui.io",
+    "packageId": "0x59dd2d56965d93bc28b63cd86f27e14ceda2ef84a019880cb65956b433c447af",
+    "globalRegistryId": "0xec2b69a0dce72a6b80223795769564d6512668a1f4c767da0ebb35a096a76b25",
+    "marketAdminCapId": "0xYOUR_MARKET_ADMIN_CAP_OBJECT_ID",
+    "gasBudget": 50000000
+  },
+  "challenge": {
+    "ttlSecs": 300
+  }
+}

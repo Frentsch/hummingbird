@@ -74,6 +74,12 @@ export const OPERATIONS = {
     fn: 'delist_and_take',
     typeArgCount: 1,
   },
+  registerAsFor: {
+    name: 'registerAsFor',
+    module: 'registry',
+    fn: 'register_as_for',
+    typeArgCount: 0,
+  },
 } as const satisfies Record<string, OperationDef>;
 
 export type OperationName = keyof typeof OPERATIONS;

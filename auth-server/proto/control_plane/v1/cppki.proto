@@ -1,0 +1,18 @@
+// Copyright 2020 Anapaya Systems
+//
+// Licensed under the Apache License, Version 2.0 (the "License")
+
+syntax = "proto3";
+
+option go_package = "github.com/scionproto/scion/hummingbird/auth-server/gen/control_plane/v1;controlplane";
+
+package proto.control_plane.v1;
+
+// Opaque identifier embedded in a SignedMessage Header to indicate which
+// certificate/key should be used for verification.
+message VerificationKeyID {
+    uint64 isd_as       = 1;
+    bytes  subject_key_id = 2;
+    uint64 trc_base     = 3;
+    uint64 trc_serial   = 4;
+}
