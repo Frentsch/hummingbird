@@ -28,7 +28,7 @@ type KeystoreConfig struct {
 }
 
 type SuiConfig struct {
-	// Sui fullnode RPC URL, e.g. https://fullnode.testnet.sui.io
+	// Sui fullnode gRPC target (host:port), e.g. fullnode.testnet.sui.io:443
 	RPCURL string `json:"rpcUrl"`
 	// Package ID of the deployed hummingbird Move package.
 	PackageID string `json:"packageId"`

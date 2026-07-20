@@ -3,10 +3,11 @@ To start the GUI:
 at http://localhost:3000
 
 # 1. Start the daemon
+cd shim
 pnpm exec sui-shim daemon
 
 # 2. Start the auth server
-cd ../auth-server
+cd auth-server
 go build cmd/auth-server/main.go
 ./main
 

@@ -7,7 +7,7 @@
     "address": "0x1737d7dc6b63ef10b7edd316524ab1ece70540a8e012dbc9593a157455ceebef"
   },
   "sui": {
-    "rpcUrl": "https://fullnode.testnet.sui.io",
+    "rpcUrl": "fullnode.testnet.sui.io:443",
     "packageId": "0xa8123235edb6079b5f3aca99c9007f71a5497423f62e959bb8ee57cb5cd43495",
     "globalRegistryId": "0x791943a824197a56f642d638e1671576a04c8229305ed9b2cf0b578397596318",
     "marketAdminCapId": "0x279164648a81e1e266ffb30a487b8d30eb9f95d27ef98f65384df22d0feec982",

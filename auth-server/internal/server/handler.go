@@ -150,7 +150,7 @@ func (h *Handler) RegisterAS(
 		return nil, connect.NewError(connect.CodeInternal,
 			fmt.Errorf("on-chain registration failed: %w", err))
 	}
-	fmt.Println("New AsAuthCap created at %w", asAuthCapID);
+	fmt.Println("New AsAuthCap created at ", asAuthCapID);
 
 	return connect.NewResponse(&v1.RegisterASResponse{AuthCapId: asAuthCapID}), nil
 }
