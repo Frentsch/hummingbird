@@ -5,8 +5,10 @@ import { AccountService } from '../gen/hummingbird/v1/account_connect.js';
 import { CreateChallengeResponse, RegisterASResponse } from '../gen/hummingbird/v1/account_pb.js';
 import { ASRegistrationService } from '../gen/hummingbird/v1/registration_connect.js';
 import { ShimCreateChallengeRequest, ShimRegisterASRequest } from '../gen/hummingbird/v1/registration_pb.js';
-import { saveConfig } from '@sui-shim/core';
+import { saveConfig, u64ToIsdAsId } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
+import { deriveObjectID } from '@mysten/sui/utils';
+import { bcs } from '@mysten/sui/bcs';
 
 function extractAuthority(ctx: HandlerContext): string {
   ctx.requestHeader.forEach((v,k,h) => console.log(k));
@@ -71,8 +73,8 @@ export function createRegistrationServiceImpl(
       if(asAuthCapId != ""){
         state.asAuthCapId = asAuthCapId;
         state.config.as.asAuthCapId = asAuthCapId;
-        //state.config.as.isdAsId = result.isdAsId;
-        //state.config.as.asRegistryId = derivedObjectId(result.isdAsId);
+        state.config.as.isdAsId = u64ToIsdAsId(result.isdAsId);
+        state.config.as.asRegistryId = deriveObjectID(state.config.package.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
         await saveConfig(state.config);
       }
 

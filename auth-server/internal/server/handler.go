@@ -152,5 +152,5 @@ func (h *Handler) RegisterAS(
 	}
 	fmt.Println("New AsAuthCap created at ", asAuthCapID);
 
-	return connect.NewResponse(&v1.ShimRegisterASResponse{AuthCapId: asAuthCapID}), nil
+	return connect.NewResponse(&v1.ShimRegisterASResponse{AuthCapId: asAuthCapID, IsdAsId: entry.IsdAsID}), nil
 }

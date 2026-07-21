@@ -61,4 +61,5 @@ message ShimRegisterASRequest {
 // Mirrors account.proto RegisterASResponse exactly.
 message ShimRegisterASResponse {
     string auth_cap_id = 1;
+    uint64 isd_as_id = 2;
 }

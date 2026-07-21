@@ -213,6 +213,7 @@ func (x *ShimRegisterASRequest) GetAuthority() string {
 type ShimRegisterASResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AuthCapId     string                 `protobuf:"bytes,1,opt,name=auth_cap_id,json=authCapId,proto3" json:"auth_cap_id,omitempty"`
+	IsdAsId       uint64                 `protobuf:"varint,2,opt,name=isd_as_id,json=isdAsId,proto3" json:"isd_as_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -254,6 +255,13 @@ func (x *ShimRegisterASResponse) GetAuthCapId() string {
 	return ""
 }
 
+func (x *ShimRegisterASResponse) GetIsdAsId() uint64 {
+	if x != nil {
+		return x.IsdAsId
+	}
+	return 0
+}
+
 var File_hummingbird_v1_registration_proto protoreflect.FileDescriptor
 
 const file_hummingbird_v1_registration_proto_rawDesc = "" +
@@ -269,9 +277,10 @@ const file_hummingbird_v1_registration_proto_rawDesc = "" +
 	"\x15ShimRegisterASRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12I\n" +
 	"\x10signed_challenge\x18\x02 \x01(\v2\x1e.proto.crypto.v1.SignedMessageR\x0fsignedChallenge\x12\x1c\n" +
-	"\tauthority\x18\x03 \x01(\tR\tauthority\"8\n" +
+	"\tauthority\x18\x03 \x01(\tR\tauthority\"T\n" +
 	"\x16ShimRegisterASResponse\x12\x1e\n" +
-	"\vauth_cap_id\x18\x01 \x01(\tR\tauthCapId2\xfc\x01\n" +
+	"\vauth_cap_id\x18\x01 \x01(\tR\tauthCapId\x12\x1a\n" +
+	"\tisd_as_id\x18\x02 \x01(\x04R\aisdAsId2\xfc\x01\n" +
 	"\x15ASRegistrationService\x12x\n" +
 	"\x0fCreateChallenge\x120.proto.hummingbird.v1.ShimCreateChallengeRequest\x1a1.proto.hummingbird.v1.ShimCreateChallengeResponse\"\x00\x12i\n" +
 	"\n" +
