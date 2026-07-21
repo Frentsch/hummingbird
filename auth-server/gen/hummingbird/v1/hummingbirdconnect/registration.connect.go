@@ -58,8 +58,8 @@ const (
 // ASRegistrationServiceClient is a client for the proto.hummingbird.v1.ASRegistrationService
 // service.
 type ASRegistrationServiceClient interface {
-	CreateChallenge(context.Context, *connect.Request[v1.CreateChallengeRequest]) (*connect.Response[v1.CreateChallengeResponse], error)
-	RegisterAS(context.Context, *connect.Request[v1.RegisterASRequest]) (*connect.Response[v1.RegisterASResponse], error)
+	CreateChallenge(context.Context, *connect.Request[v1.ShimCreateChallengeRequest]) (*connect.Response[v1.ShimCreateChallengeResponse], error)
+	RegisterAS(context.Context, *connect.Request[v1.ShimRegisterASRequest]) (*connect.Response[v1.ShimRegisterASResponse], error)
 }
 
 // NewASRegistrationServiceClient constructs a client for the
@@ -73,13 +73,13 @@ func NewASRegistrationServiceClient(httpClient connect.HTTPClient, baseURL strin
 	baseURL = strings.TrimRight(baseURL, "/")
 	aSRegistrationServiceMethods := v1.File_hummingbird_v1_registration_proto.Services().ByName("ASRegistrationService").Methods()
 	return &aSRegistrationServiceClient{
-		createChallenge: connect.NewClient[v1.CreateChallengeRequest, v1.CreateChallengeResponse](
+		createChallenge: connect.NewClient[v1.ShimCreateChallengeRequest, v1.ShimCreateChallengeResponse](
 			httpClient,
 			baseURL+ASRegistrationServiceCreateChallengeProcedure,
 			connect.WithSchema(aSRegistrationServiceMethods.ByName("CreateChallenge")),
 			connect.WithClientOptions(opts...),
 		),
-		registerAS: connect.NewClient[v1.RegisterASRequest, v1.RegisterASResponse](
+		registerAS: connect.NewClient[v1.ShimRegisterASRequest, v1.ShimRegisterASResponse](
 			httpClient,
 			baseURL+ASRegistrationServiceRegisterASProcedure,
 			connect.WithSchema(aSRegistrationServiceMethods.ByName("RegisterAS")),
@@ -90,25 +90,25 @@ func NewASRegistrationServiceClient(httpClient connect.HTTPClient, baseURL strin
 
 // aSRegistrationServiceClient implements ASRegistrationServiceClient.
 type aSRegistrationServiceClient struct {
-	createChallenge *connect.Client[v1.CreateChallengeRequest, v1.CreateChallengeResponse]
-	registerAS      *connect.Client[v1.RegisterASRequest, v1.RegisterASResponse]
+	createChallenge *connect.Client[v1.ShimCreateChallengeRequest, v1.ShimCreateChallengeResponse]
+	registerAS      *connect.Client[v1.ShimRegisterASRequest, v1.ShimRegisterASResponse]
 }
 
 // CreateChallenge calls proto.hummingbird.v1.ASRegistrationService.CreateChallenge.
-func (c *aSRegistrationServiceClient) CreateChallenge(ctx context.Context, req *connect.Request[v1.CreateChallengeRequest]) (*connect.Response[v1.CreateChallengeResponse], error) {
+func (c *aSRegistrationServiceClient) CreateChallenge(ctx context.Context, req *connect.Request[v1.ShimCreateChallengeRequest]) (*connect.Response[v1.ShimCreateChallengeResponse], error) {
 	return c.createChallenge.CallUnary(ctx, req)
 }
 
 // RegisterAS calls proto.hummingbird.v1.ASRegistrationService.RegisterAS.
-func (c *aSRegistrationServiceClient) RegisterAS(ctx context.Context, req *connect.Request[v1.RegisterASRequest]) (*connect.Response[v1.RegisterASResponse], error) {
+func (c *aSRegistrationServiceClient) RegisterAS(ctx context.Context, req *connect.Request[v1.ShimRegisterASRequest]) (*connect.Response[v1.ShimRegisterASResponse], error) {
 	return c.registerAS.CallUnary(ctx, req)
 }
 
 // ASRegistrationServiceHandler is an implementation of the
 // proto.hummingbird.v1.ASRegistrationService service.
 type ASRegistrationServiceHandler interface {
-	CreateChallenge(context.Context, *connect.Request[v1.CreateChallengeRequest]) (*connect.Response[v1.CreateChallengeResponse], error)
-	RegisterAS(context.Context, *connect.Request[v1.RegisterASRequest]) (*connect.Response[v1.RegisterASResponse], error)
+	CreateChallenge(context.Context, *connect.Request[v1.ShimCreateChallengeRequest]) (*connect.Response[v1.ShimCreateChallengeResponse], error)
+	RegisterAS(context.Context, *connect.Request[v1.ShimRegisterASRequest]) (*connect.Response[v1.ShimRegisterASResponse], error)
 }
 
 // NewASRegistrationServiceHandler builds an HTTP handler from the service implementation. It
@@ -145,10 +145,10 @@ func NewASRegistrationServiceHandler(svc ASRegistrationServiceHandler, opts ...c
 // UnimplementedASRegistrationServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedASRegistrationServiceHandler struct{}
 
-func (UnimplementedASRegistrationServiceHandler) CreateChallenge(context.Context, *connect.Request[v1.CreateChallengeRequest]) (*connect.Response[v1.CreateChallengeResponse], error) {
+func (UnimplementedASRegistrationServiceHandler) CreateChallenge(context.Context, *connect.Request[v1.ShimCreateChallengeRequest]) (*connect.Response[v1.ShimCreateChallengeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("proto.hummingbird.v1.ASRegistrationService.CreateChallenge is not implemented"))
 }
 
-func (UnimplementedASRegistrationServiceHandler) RegisterAS(context.Context, *connect.Request[v1.RegisterASRequest]) (*connect.Response[v1.RegisterASResponse], error) {
+func (UnimplementedASRegistrationServiceHandler) RegisterAS(context.Context, *connect.Request[v1.ShimRegisterASRequest]) (*connect.Response[v1.ShimRegisterASResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("proto.hummingbird.v1.ASRegistrationService.RegisterAS is not implemented"))
 }

@@ -36,7 +36,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type CreateChallengeRequest struct {
+type ShimCreateChallengeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// ISD-AS identifier of the registering AS.
 	Ia uint64 `protobuf:"varint,1,opt,name=ia,proto3" json:"ia,omitempty"`
@@ -48,20 +48,20 @@ type CreateChallengeRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateChallengeRequest) Reset() {
-	*x = CreateChallengeRequest{}
+func (x *ShimCreateChallengeRequest) Reset() {
+	*x = ShimCreateChallengeRequest{}
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateChallengeRequest) String() string {
+func (x *ShimCreateChallengeRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateChallengeRequest) ProtoMessage() {}
+func (*ShimCreateChallengeRequest) ProtoMessage() {}
 
-func (x *CreateChallengeRequest) ProtoReflect() protoreflect.Message {
+func (x *ShimCreateChallengeRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -73,19 +73,19 @@ func (x *CreateChallengeRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateChallengeRequest.ProtoReflect.Descriptor instead.
-func (*CreateChallengeRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ShimCreateChallengeRequest.ProtoReflect.Descriptor instead.
+func (*ShimCreateChallengeRequest) Descriptor() ([]byte, []int) {
 	return file_hummingbird_v1_registration_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CreateChallengeRequest) GetIa() uint64 {
+func (x *ShimCreateChallengeRequest) GetIa() uint64 {
 	if x != nil {
 		return x.Ia
 	}
 	return 0
 }
 
-func (x *CreateChallengeRequest) GetSuiAddress() string {
+func (x *ShimCreateChallengeRequest) GetSuiAddress() string {
 	if x != nil {
 		return x.SuiAddress
 	}
@@ -93,7 +93,7 @@ func (x *CreateChallengeRequest) GetSuiAddress() string {
 }
 
 // Flat challenge — mirrors account.proto CreateChallengeResponse.
-type CreateChallengeResponse struct {
+type ShimCreateChallengeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
@@ -101,20 +101,20 @@ type CreateChallengeResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateChallengeResponse) Reset() {
-	*x = CreateChallengeResponse{}
+func (x *ShimCreateChallengeResponse) Reset() {
+	*x = ShimCreateChallengeResponse{}
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateChallengeResponse) String() string {
+func (x *ShimCreateChallengeResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateChallengeResponse) ProtoMessage() {}
+func (*ShimCreateChallengeResponse) ProtoMessage() {}
 
-func (x *CreateChallengeResponse) ProtoReflect() protoreflect.Message {
+func (x *ShimCreateChallengeResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -126,19 +126,19 @@ func (x *CreateChallengeResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateChallengeResponse.ProtoReflect.Descriptor instead.
-func (*CreateChallengeResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ShimCreateChallengeResponse.ProtoReflect.Descriptor instead.
+func (*ShimCreateChallengeResponse) Descriptor() ([]byte, []int) {
 	return file_hummingbird_v1_registration_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *CreateChallengeResponse) GetId() string {
+func (x *ShimCreateChallengeResponse) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *CreateChallengeResponse) GetValue() []byte {
+func (x *ShimCreateChallengeResponse) GetValue() []byte {
 	if x != nil {
 		return x.Value
 	}
@@ -147,7 +147,7 @@ func (x *CreateChallengeResponse) GetValue() []byte {
 
 // Mirrors account.proto RegisterASRequest, plus the HTTP authority the AS used
 // when signing (needed to reproduce the associated-data for ECDSA verification).
-type RegisterASRequest struct {
+type ShimRegisterASRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	SignedChallenge *v1.SignedMessage      `protobuf:"bytes,2,opt,name=signed_challenge,json=signedChallenge,proto3" json:"signed_challenge,omitempty"`
@@ -158,20 +158,20 @@ type RegisterASRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RegisterASRequest) Reset() {
-	*x = RegisterASRequest{}
+func (x *ShimRegisterASRequest) Reset() {
+	*x = ShimRegisterASRequest{}
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RegisterASRequest) String() string {
+func (x *ShimRegisterASRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RegisterASRequest) ProtoMessage() {}
+func (*ShimRegisterASRequest) ProtoMessage() {}
 
-func (x *RegisterASRequest) ProtoReflect() protoreflect.Message {
+func (x *ShimRegisterASRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -183,26 +183,26 @@ func (x *RegisterASRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegisterASRequest.ProtoReflect.Descriptor instead.
-func (*RegisterASRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ShimRegisterASRequest.ProtoReflect.Descriptor instead.
+func (*ShimRegisterASRequest) Descriptor() ([]byte, []int) {
 	return file_hummingbird_v1_registration_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *RegisterASRequest) GetId() string {
+func (x *ShimRegisterASRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *RegisterASRequest) GetSignedChallenge() *v1.SignedMessage {
+func (x *ShimRegisterASRequest) GetSignedChallenge() *v1.SignedMessage {
 	if x != nil {
 		return x.SignedChallenge
 	}
 	return nil
 }
 
-func (x *RegisterASRequest) GetAuthority() string {
+func (x *ShimRegisterASRequest) GetAuthority() string {
 	if x != nil {
 		return x.Authority
 	}
@@ -210,27 +210,27 @@ func (x *RegisterASRequest) GetAuthority() string {
 }
 
 // Mirrors account.proto RegisterASResponse exactly.
-type RegisterASResponse struct {
+type ShimRegisterASResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AuthCapId     string                 `protobuf:"bytes,1,opt,name=auth_cap_id,json=authCapId,proto3" json:"auth_cap_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RegisterASResponse) Reset() {
-	*x = RegisterASResponse{}
+func (x *ShimRegisterASResponse) Reset() {
+	*x = ShimRegisterASResponse{}
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RegisterASResponse) String() string {
+func (x *ShimRegisterASResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RegisterASResponse) ProtoMessage() {}
+func (*ShimRegisterASResponse) ProtoMessage() {}
 
-func (x *RegisterASResponse) ProtoReflect() protoreflect.Message {
+func (x *ShimRegisterASResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_hummingbird_v1_registration_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -242,12 +242,12 @@ func (x *RegisterASResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RegisterASResponse.ProtoReflect.Descriptor instead.
-func (*RegisterASResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ShimRegisterASResponse.ProtoReflect.Descriptor instead.
+func (*ShimRegisterASResponse) Descriptor() ([]byte, []int) {
 	return file_hummingbird_v1_registration_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *RegisterASResponse) GetAuthCapId() string {
+func (x *ShimRegisterASResponse) GetAuthCapId() string {
 	if x != nil {
 		return x.AuthCapId
 	}
@@ -258,24 +258,24 @@ var File_hummingbird_v1_registration_proto protoreflect.FileDescriptor
 
 const file_hummingbird_v1_registration_proto_rawDesc = "" +
 	"\n" +
-	"!hummingbird/v1/registration.proto\x12\x14proto.hummingbird.v1\x1a\x16crypto/v1/signed.proto\"I\n" +
-	"\x16CreateChallengeRequest\x12\x0e\n" +
+	"!hummingbird/v1/registration.proto\x12\x14proto.hummingbird.v1\x1a\x16crypto/v1/signed.proto\"M\n" +
+	"\x1aShimCreateChallengeRequest\x12\x0e\n" +
 	"\x02ia\x18\x01 \x01(\x04R\x02ia\x12\x1f\n" +
 	"\vsui_address\x18\x02 \x01(\tR\n" +
-	"suiAddress\"?\n" +
-	"\x17CreateChallengeResponse\x12\x0e\n" +
+	"suiAddress\"C\n" +
+	"\x1bShimCreateChallengeResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\"\x8c\x01\n" +
-	"\x11RegisterASRequest\x12\x0e\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"\x90\x01\n" +
+	"\x15ShimRegisterASRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12I\n" +
 	"\x10signed_challenge\x18\x02 \x01(\v2\x1e.proto.crypto.v1.SignedMessageR\x0fsignedChallenge\x12\x1c\n" +
-	"\tauthority\x18\x03 \x01(\tR\tauthority\"4\n" +
-	"\x12RegisterASResponse\x12\x1e\n" +
-	"\vauth_cap_id\x18\x01 \x01(\tR\tauthCapId2\xec\x01\n" +
-	"\x15ASRegistrationService\x12p\n" +
-	"\x0fCreateChallenge\x12,.proto.hummingbird.v1.CreateChallengeRequest\x1a-.proto.hummingbird.v1.CreateChallengeResponse\"\x00\x12a\n" +
+	"\tauthority\x18\x03 \x01(\tR\tauthority\"8\n" +
+	"\x16ShimRegisterASResponse\x12\x1e\n" +
+	"\vauth_cap_id\x18\x01 \x01(\tR\tauthCapId2\xfc\x01\n" +
+	"\x15ASRegistrationService\x12x\n" +
+	"\x0fCreateChallenge\x120.proto.hummingbird.v1.ShimCreateChallengeRequest\x1a1.proto.hummingbird.v1.ShimCreateChallengeResponse\"\x00\x12i\n" +
 	"\n" +
-	"RegisterAS\x12'.proto.hummingbird.v1.RegisterASRequest\x1a(.proto.hummingbird.v1.RegisterASResponse\"\x00BTZRgithub.com/scionproto/scion/hummingbird/auth-server/gen/hummingbird/v1;hummingbirdb\x06proto3"
+	"RegisterAS\x12+.proto.hummingbird.v1.ShimRegisterASRequest\x1a,.proto.hummingbird.v1.ShimRegisterASResponse\"\x00BTZRgithub.com/scionproto/scion/hummingbird/auth-server/gen/hummingbird/v1;hummingbirdb\x06proto3"
 
 var (
 	file_hummingbird_v1_registration_proto_rawDescOnce sync.Once
@@ -291,18 +291,18 @@ func file_hummingbird_v1_registration_proto_rawDescGZIP() []byte {
 
 var file_hummingbird_v1_registration_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_hummingbird_v1_registration_proto_goTypes = []any{
-	(*CreateChallengeRequest)(nil),  // 0: proto.hummingbird.v1.CreateChallengeRequest
-	(*CreateChallengeResponse)(nil), // 1: proto.hummingbird.v1.CreateChallengeResponse
-	(*RegisterASRequest)(nil),       // 2: proto.hummingbird.v1.RegisterASRequest
-	(*RegisterASResponse)(nil),      // 3: proto.hummingbird.v1.RegisterASResponse
-	(*v1.SignedMessage)(nil),        // 4: proto.crypto.v1.SignedMessage
+	(*ShimCreateChallengeRequest)(nil),  // 0: proto.hummingbird.v1.ShimCreateChallengeRequest
+	(*ShimCreateChallengeResponse)(nil), // 1: proto.hummingbird.v1.ShimCreateChallengeResponse
+	(*ShimRegisterASRequest)(nil),       // 2: proto.hummingbird.v1.ShimRegisterASRequest
+	(*ShimRegisterASResponse)(nil),      // 3: proto.hummingbird.v1.ShimRegisterASResponse
+	(*v1.SignedMessage)(nil),            // 4: proto.crypto.v1.SignedMessage
 }
 var file_hummingbird_v1_registration_proto_depIdxs = []int32{
-	4, // 0: proto.hummingbird.v1.RegisterASRequest.signed_challenge:type_name -> proto.crypto.v1.SignedMessage
-	0, // 1: proto.hummingbird.v1.ASRegistrationService.CreateChallenge:input_type -> proto.hummingbird.v1.CreateChallengeRequest
-	2, // 2: proto.hummingbird.v1.ASRegistrationService.RegisterAS:input_type -> proto.hummingbird.v1.RegisterASRequest
-	1, // 3: proto.hummingbird.v1.ASRegistrationService.CreateChallenge:output_type -> proto.hummingbird.v1.CreateChallengeResponse
-	3, // 4: proto.hummingbird.v1.ASRegistrationService.RegisterAS:output_type -> proto.hummingbird.v1.RegisterASResponse
+	4, // 0: proto.hummingbird.v1.ShimRegisterASRequest.signed_challenge:type_name -> proto.crypto.v1.SignedMessage
+	0, // 1: proto.hummingbird.v1.ASRegistrationService.CreateChallenge:input_type -> proto.hummingbird.v1.ShimCreateChallengeRequest
+	2, // 2: proto.hummingbird.v1.ASRegistrationService.RegisterAS:input_type -> proto.hummingbird.v1.ShimRegisterASRequest
+	1, // 3: proto.hummingbird.v1.ASRegistrationService.CreateChallenge:output_type -> proto.hummingbird.v1.ShimCreateChallengeResponse
+	3, // 4: proto.hummingbird.v1.ASRegistrationService.RegisterAS:output_type -> proto.hummingbird.v1.ShimRegisterASResponse
 	3, // [3:5] is the sub-list for method output_type
 	1, // [1:3] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

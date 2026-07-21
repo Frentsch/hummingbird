@@ -168,7 +168,7 @@ func (c *Client) RegisterAsFor(packageID, globalRegistryID, marketAdminCapID str
 		tx.Object(capArg),
 		tx.Object(registryArg),
 		tx.Pure(isdAsID),
-		tx.Pure(exp) //time now + 30 days as uint64
+		tx.Pure(exp), //time now + 30 days as uint64
 		tx.Pure(recipient),
 	})
 

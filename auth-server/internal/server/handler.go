@@ -37,8 +37,8 @@ func New(cfg *config.Config, challenges *challenge.Store, suiClient *sui.Client,
 
 func (h *Handler) CreateChallenge(
 	_ context.Context,
-	req *connect.Request[v1.CreateChallengeRequest],
-) (*connect.Response[v1.CreateChallengeResponse], error) {
+	req *connect.Request[v1.ShimCreateChallengeRequest],
+) (*connect.Response[v1.ShimCreateChallengeResponse], error) {
 
 	if req.Msg.SuiAddress == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("sui_address is required"))
@@ -50,7 +50,7 @@ func (h *Handler) CreateChallenge(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&v1.CreateChallengeResponse{
+	return connect.NewResponse(&v1.ShimCreateChallengeResponse{
 		Id:    id,
 		Value: nonce,
 	}), nil
@@ -58,8 +58,8 @@ func (h *Handler) CreateChallenge(
 
 func (h *Handler) RegisterAS(
 	_ context.Context,
-	req *connect.Request[v1.RegisterASRequest],
-) (*connect.Response[v1.RegisterASResponse], error) {
+	req *connect.Request[v1.ShimRegisterASRequest],
+) (*connect.Response[v1.ShimRegisterASResponse], error) {
 	sm := req.Msg.SignedChallenge
 
 	if sm == nil {
@@ -152,5 +152,5 @@ func (h *Handler) RegisterAS(
 	}
 	fmt.Println("New AsAuthCap created at ", asAuthCapID);
 
-	return connect.NewResponse(&v1.RegisterASResponse{AuthCapId: asAuthCapID}), nil
+	return connect.NewResponse(&v1.ShimRegisterASResponse{AuthCapId: asAuthCapID}), nil
 }

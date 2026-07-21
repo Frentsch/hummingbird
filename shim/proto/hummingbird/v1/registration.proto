@@ -24,10 +24,12 @@ import "crypto/v1/signed.proto";
 // account.proto; the only structural difference is that CreateChallengeRequest
 // carries the sui_address that the shim injects from its own keystore.
 //
-// Message types below are prefixed "Shim" to match the vendored copy of this
-// file at shim/proto/hummingbird/v1/registration.proto, where the prefix is
-// required to avoid a name collision with account.proto during TS codegen.
-// Keep both copies' field definitions in sync when updating either one.
+// Message types below are prefixed "Shim" purely to avoid colliding with the
+// identically-named, differently-shaped messages in account.proto when both
+// files are compiled together for the shim's TS codegen — the prefix has no
+// effect on the wire format (service/package names, which do determine the
+// RPC path, are unchanged) or on the canonical copy in auth-server/proto.
+// Keep the field definitions in sync with that copy when updating.
 service ASRegistrationService {
     rpc CreateChallenge(ShimCreateChallengeRequest) returns (ShimCreateChallengeResponse) {}
     rpc RegisterAS(ShimRegisterASRequest) returns (ShimRegisterASResponse) {}
