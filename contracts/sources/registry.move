@@ -43,6 +43,7 @@ module hummingbird::registry {
     struct AsAuthCap has key, store {
         id: UID,
         isd_as_id: u64,
+        exp: u64,
     }
 
     struct AsRegistered has copy, drop {
@@ -86,37 +87,18 @@ module hummingbird::registry {
         bag::add(&mut global.as_registries, isd_as_id, registry_id);
         transfer::share_object(registry);
     }
+
     /// Register a new AS. Returns an AsAuthCap transferred to the caller.
-    public fun register_as(
+    fun register_as(
         global: &mut GlobalRegistry,
         isd_as_id: u64,
+        exp: u64,
         ctx: &mut TxContext,
     ): AsAuthCap {
         if(!bag::contains(&global.as_registries, isd_as_id)){
             create_as_registry(global, isd_as_id, ctx);
-        };/*
-        let registry = AsRegistry {
-            id: derived_object::claim(&mut global.id, isd_as_id),
-            isd_as_id,
-            interfaces: bag::new(ctx),
         };
-        let registry_id = object::id(&registry);
-        bag::add(&mut global.as_registries, isd_as_id, registry_id);
-        
-        event::emit(AsRegistered { isd_as_id, registry_id });
-        transfer::share_object(registry);
-        */
-        AsAuthCap { id: object::new(ctx), isd_as_id }
-    }
-
-    #[lint_allow(self_transfer)]
-    public entry fun register_as_to_sender(
-        global: &mut GlobalRegistry,
-        isd_as_id: u64,
-        ctx: &mut TxContext,
-    ) {
-        let cap = register_as(global, isd_as_id, ctx);
-        transfer::transfer(cap, tx_context::sender(ctx));
+        AsAuthCap { id: object::new(ctx), isd_as_id, exp }
     }
 
     /// Register an AS on behalf of `recipient`. Only callable by the holder
@@ -125,10 +107,11 @@ module hummingbird::registry {
         _cap: &MarketAdminCap,
         global: &mut GlobalRegistry,
         isd_as_id: u64,
+        exp: u64,
         recipient: address,
         ctx: &mut TxContext,
     ) {
-        let cap = register_as(global, isd_as_id, ctx);
+        let cap = register_as(global, isd_as_id, exp, ctx);
         transfer::transfer(cap, recipient);
     }
 
