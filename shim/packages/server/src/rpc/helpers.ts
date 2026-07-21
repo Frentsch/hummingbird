@@ -11,10 +11,13 @@ function assetFromFields(objectId: string, assetFields: Record<string, unknown>,
         ia: BigInt(assetFields['isd_as_id'] as string),
         ...(ingressId ? { ifIdIngress: ingressId } : {}),
         ...(egressId ? { ifIdEgress: egressId } : {}),
-        bandwidth: assetFields['bandwidth'] as number,
+        bandwidth: Number(assetFields['bandwidth']),
+        bandwidthMin: 0,
+        bandwidthMax: Number(assetFields['bandwidth']),
         startsAt: new Timestamp({ seconds: start}),
         stopsAt: new Timestamp({ seconds: exp}),
-        timeGranularity: assetFields['time_granularity'] as number,
+        timeGranularity: Number(assetFields['time_granularity']),
+        timeMinDuration: 0,
         price,
     });
 }
@@ -39,7 +42,7 @@ export function ListingToQueryAsset(obj: { objectId: string; json: Record<string
     const assetFields = fields['asset'] as Record<string, unknown>;
     console.log("asset fields:");
     console.log(assetFields);
-    const price = fields['price'] as number;
+    const price = Number(fields['price']);
     return assetFromFields(obj.objectId, assetFields, price);
 }
 

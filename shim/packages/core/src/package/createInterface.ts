@@ -26,6 +26,7 @@ export function buildCreateInterface(params: CreateInterfaceParams): Transaction
     arguments: [
       tx.object(params.asRegistryId),
       tx.object(params.asAuthCapId),
+      tx.object("0x6"), //clock
       tx.pure.u16(params.interfaceId),
     ],
   });

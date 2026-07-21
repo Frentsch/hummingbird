@@ -92,7 +92,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     async publishAsset(req, _ctx) {
       const asset = req.asset;
       if(!asset) throw new ConnectError("Must specify Asset", Code.FailedPrecondition);
-      if(!state.config.as.isdAsId) throw new ConnectError('AS ID not configured. Set your isd-as-id in the config', Code.Unauthenticated);
+      if(!state.config.as.isdAsId || !state.config.as.asRegistryId || !state.config.as.asAuthCapId) throw new ConnectError('AS not registered.', Code.Unauthenticated);
       
       if(!state.config.package.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
       if (asset.ifIdIngress === undefined && asset.ifIdEgress === undefined) {
@@ -104,8 +104,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if(asset.timeMinDuration>asset.stopsAt.seconds-asset.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
       try{
+        // as registry is now created during registration
+        // TODO remove
       //create as registry if not existing
+      /*
       const derivedAsRegistryId = deriveObjectID(state.config.package.globalRegistryId, 'u64', bcs.U64.serialize(isdAsIdToU64(isdAsId)).toBytes());
+      console.log(derivedAsRegistryId);
       const { objects: [asRegistryResult] } = await state.client.getObjects({ objectIds: [derivedAsRegistryId] });
       if (asRegistryResult instanceof Error) {
         const result = await executeTransaction(state.client, state.signer,
@@ -116,9 +120,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           })
         );
         state.config.as.asAuthCapId = extractCreatedObjectId(result, getObjectType(state.config.package.id, "registry", "AsAuthCap"));
-      }
-      state.config.as.asRegistryId = derivedAsRegistryId;
-      saveConfig(state.config);
+      }*/
+      //state.config.as.asRegistryId = derivedAsRegistryId;
+      //saveConfig(state.config);
 
       //create interface if not exists
       const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
