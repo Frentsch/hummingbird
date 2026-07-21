@@ -13,25 +13,25 @@ module hummingbird::registry {
 
     /// Capability held by the off-chain auth server that authorises it to
     /// register ASes on behalf of SCION operators.
-    struct MarketAdminCap has key, store {
+    public struct MarketAdminCap has key, store {
         id: UID,
     }
 
     /// Root shared object. Single instance, ID known at deploy time.
-    struct GlobalRegistry has key {
+    public struct GlobalRegistry has key {
         id: UID,
         as_registries: Bag,  // isd_as_id (u64) -> AsRegistry object ID
     }
 
     /// Per-AS shared object. ID recorded in GlobalRegistry.
-    struct AsRegistry has key {
+    public struct AsRegistry has key {
         id: UID,
         isd_as_id: u64,
         interfaces: Bag,  // interface_id (u16) -> Interface object ID
     }
 
     // Interface holding its listings. Uniquely identified by isd_as_id & interface_id
-    struct Interface has key {
+    public struct Interface has key {
         id: UID,
         isd_as_id: u64,
         interface_id: u16,
@@ -40,18 +40,18 @@ module hummingbird::registry {
 
     /// Capability that authorises the holder to register interfaces and create
     /// root listings under a specific AS.
-    struct AsAuthCap has key, store {
+    public struct AsAuthCap has key, store {
         id: UID,
         isd_as_id: u64,
         exp: u64,
     }
 
-    struct AsRegistered has copy, drop {
+    public struct AsRegistered has copy, drop {
         isd_as_id: u64,
         registry_id: ID,
     }
 
-    struct InterfaceRegistered has copy, drop {
+    public struct InterfaceRegistered has copy, drop {
         isd_as_id: u64,
         interface_object_id: ID,
         interface_id: u16,
@@ -156,6 +156,7 @@ module hummingbird::registry {
     }
 
     public fun cap_isd_as_id(cap: &AsAuthCap): u64 { cap.isd_as_id }
+    public fun cap_exp(cap: &AsAuthCap): u64 { cap.exp}
     public fun as_registry_isd_as_id(r: &AsRegistry): u64 { r.isd_as_id }
     public fun interface_isd_as_id(inter: &Interface): u64 { inter.isd_as_id }
     public fun interface_id(inter: &Interface): u16 { inter.interface_id }

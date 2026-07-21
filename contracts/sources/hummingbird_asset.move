@@ -20,7 +20,7 @@ module hummingbird::hummingbird_asset {
 
     /// Bandwidth reservation token for a single router interface.
     /// Bandwidth is in multiples of 1 kbps.
-    struct HummingbirdAsset has key, store {
+    public struct HummingbirdAsset has key, store {
         id: UID,
         isd_as_id: u64,
         if_ingress_id: Option<u16>,
@@ -35,7 +35,7 @@ module hummingbird::hummingbird_asset {
     }
 
     /// Wraps an ingress+egress pair sent to the AS for data-plane key delivery.
-    struct RedeemRequest has key {
+    public struct RedeemRequest has key {
         id: UID,
         ingress_egress_asset: HummingbirdAsset,
         public_key: vector<u8>,
@@ -43,7 +43,7 @@ module hummingbird::hummingbird_asset {
     }
 
     /// Proof-of-reservation delivered to the buyer after the AS fulfils the redeem request.
-    struct Reservation has key, store {
+    public struct Reservation has key, store {
         id: UID,
         isd_as_id: u64,
         ingress_id: u16,
@@ -54,12 +54,12 @@ module hummingbird::hummingbird_asset {
         encrypted_reservation: vector<u8>,
     }
 
-    struct RedeemRequestReceived has copy, drop {
+    public struct RedeemRequestReceived has copy, drop {
         redeem_request_id: ID,
         issuer: address,
     }
 
-    struct ReservationDelivered has copy, drop {
+    public struct ReservationDelivered has copy, drop {
         isd_as_id: u64,
         redeem_request_id: ID,
         public_key: vector<u8>,
@@ -242,7 +242,7 @@ module hummingbird::hummingbird_asset {
 
     /// Buyer sends ingress + egress pair to the AS for data-plane key exchange.
     public entry fun redeem(
-        ingress_asset: HummingbirdAsset,
+        mut ingress_asset: HummingbirdAsset,
         egress_asset: HummingbirdAsset,
         public_key: vector<u8>,
         ctx: &mut TxContext,
