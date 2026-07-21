@@ -4,11 +4,11 @@ export type SqliteDb = InstanceType<typeof Database>;
 
 export interface ReservationRow {
   key: number;
-  resId: bigint;
+  resId: number;
   ia: bigint;
   ingressId: number;
   egressId: number;
-  bw: bigint;
+  bw: number;
   startsAt: Date;
   stopsAt: Date;
   ak: string;
@@ -18,7 +18,7 @@ export interface ReservationFilter {
   ia?: bigint;
   ingressId?: number;
   egressId?: number;
-  bw?: bigint;
+  bw?: number;
   startsAt?: Date;
   stopsAt?: Date;
 }
@@ -67,11 +67,11 @@ export function insertReservation(
 
 interface RawRow {
   key: number;
-  res_id: bigint;
+  res_id: number;
   ia: bigint;
   ingress_id: number;
   egress_id: number;
-  bw: bigint;
+  bw: number;
   starts_at: number;
   stops_at: number;
   ak: string;
@@ -101,7 +101,7 @@ export function queryReservations(
     ia:        r.ia,
     ingressId: Number(r.ingress_id),
     egressId:  Number(r.egress_id),
-    bw:        r.bw,
+    bw:        Number(r.bw),
     startsAt:  new Date(Number(r.starts_at)),
     stopsAt:   new Date(Number(r.stops_at)),
     ak:        r.ak,

@@ -3,8 +3,8 @@ import type { SuiGrpcClient } from './sui-client.js';
 
 export interface DeliveryResult {
   encryptedReservation: Uint8Array;
-  resId: bigint,
-  bwRounded: bigint,
+  resId: number,
+  bwRounded: number,
   bwDataplaneEncoding: number,
 }
 
@@ -21,8 +21,8 @@ const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   redeem_request_id: bcs.Address,
   public_key: bcs.vector(bcs.u8()),
   encrypted_reservation: bcs.vector(bcs.u8()),
-  res_id: bcs.u64().transform({ input: (v: bigint) => v, output: (v) => BigInt(v) }), //per default bcs parses u64 to strings
-  bw_rounded: bcs.u64().transform({ input: (v: bigint) => v, output: (v) => BigInt(v) }),
+  res_id: bcs.u32(),
+  bw_rounded: bcs.u32(),
   bw_dataplane_encoding: bcs.u16(),
 });
 
@@ -68,7 +68,7 @@ export class DeliveryListener {
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;
                 
-                let decoded: { redeem_request_id: string; encrypted_reservation: number[]; res_id: bigint, bw_rounded: bigint; bw_dataplane_encoding: number };
+                let decoded: { redeem_request_id: string; encrypted_reservation: number[]; res_id: number, bw_rounded: number; bw_dataplane_encoding: number };
                 try {
                   const fullDecode = ReservationDeliveredBCS.parse(event.contents.value);
                   console.log(fullDecode);

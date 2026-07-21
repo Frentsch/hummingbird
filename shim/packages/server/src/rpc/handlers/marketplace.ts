@@ -6,7 +6,7 @@ import {
   PublishAssetResponse,
   SearchAssetsRequest,
   SearchAssetsResponse,
-  Asset,
+  SearchAsset,
   BuyAssetsResponse,
   BoughtAsset,
   RedeemAssetResponse,
@@ -47,15 +47,16 @@ import type { ReservationFilter } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 import { assert } from 'node:console';
+import { requestHeaderWithCompression } from '@connectrpc/connect/protocol-connect';
 
-const API_MAJOR_VERSION = 0n;
-const API_MINOR_VERSION = 1n;
+const API_MAJOR_VERSION = 0;
+const API_MINOR_VERSION = 1;
 
-function filterAsset(asset: Asset, req: SearchAssetsRequest): boolean {
+function filterAsset(asset: SearchAsset, req: SearchAssetsRequest): boolean {
   if (req.ia              !== undefined && asset.ia          !== req.ia)              return false;
   if (req.ifIdIngress     !== undefined && asset.ifIdIngress !== req.ifIdIngress)     return false;
   if (req.ifIdEgress      !== undefined && asset.ifIdEgress  !== req.ifIdEgress)      return false;
-  if (req.minRequiredBw   !== undefined && asset.bw          <  req.minRequiredBw)   return false;
+  if (req.minRequiredBw   !== undefined && asset.bandwidth          <  req.minRequiredBw)   return false;
   if (req.price           !== undefined && asset.price       >  req.price)            return false;
   if (req.startsAtLatest  !== undefined && asset.startsAt    !== undefined &&
       asset.startsAt.seconds > req.startsAtLatest.seconds)                            return false;
@@ -68,7 +69,7 @@ function filterReservation(r: Reservation, req: FetchReservationsRequest): boole
   if (req.ia        !== undefined && r.ia        !== req.ia)        return false;
   if (req.ingressId !== undefined && r.ingressId !== req.ingressId) return false;
   if (req.egressId  !== undefined && r.egressId  !== req.egressId)  return false;
-  if (req.bw        !== undefined && r.bw        !== req.bw)        return false;
+  if (req.bandwidth        !== undefined && r.bandwidth        !== req.bandwidth)        return false;
   if (req.startsAt  !== undefined && r.startsAt  !== undefined &&
       r.startsAt.seconds < req.startsAt.seconds)                    return false;
   if (req.stopsAt   !== undefined && r.stopsAt   !== undefined &&
@@ -84,21 +85,23 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         apiMajorVersion: API_MAJOR_VERSION,
         apiMinorVersion: API_MINOR_VERSION,
         currency: DEFAULT_COIN_TYPE,
-        maxStatisticsGranularity: 1n,
+        maxStatisticsGranularity: 1,
       });
     },
 
     async publishAsset(req, _ctx) {
+      const asset = req.asset;
+      if(!asset) throw new ConnectError("Must specify Asset", Code.FailedPrecondition);
       if(!state.config.as.isdAsId) throw new ConnectError('AS ID not configured. Set your isd-as-id in the config', Code.Unauthenticated);
       
       if(!state.config.package.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
-      if (req.ifIdIngress === undefined && req.ifIdEgress === undefined) {
+      if (asset.ifIdIngress === undefined && asset.ifIdEgress === undefined) {
         throw new ConnectError('At least one of if_id_ingress or if_id_egress must be set', Code.InvalidArgument);
       }
-      if(req.bandwidth<=0) throw new ConnectError('Bandwidth must be at least 1', Code.FailedPrecondition);
-      if(!req.startsAt || !req.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
-      if(req.bandwidthMin>req.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
-      if(req.timeMinDuration>req.stopsAt.seconds-req.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
+      if(asset.bandwidth<=0) throw new ConnectError('Bandwidth must be at least 1', Code.FailedPrecondition);
+      if(!asset.startsAt || !asset.stopsAt) throw new ConnectError('Must specify start and end time', Code.FailedPrecondition);
+      if(asset.bandwidthMin>asset.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
+      if(asset.timeMinDuration>asset.stopsAt.seconds-asset.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
       try{
       //create as registry if not existing
@@ -118,7 +121,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       saveConfig(state.config);
 
       //create interface if not exists
-      const ifId = req.ifIdIngress ?? req.ifIdEgress!;
+      const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
       const interfaceObjectId = deriveObjectID(state.config.as.asRegistryId, 'u16',  bcs.U16.serialize(ifId).toBytes());
       const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
       if (interfaceResult instanceof Error) {
@@ -162,8 +165,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
 
 
-      const start = req.startsAt ? Number(req.startsAt.seconds)  : Date.now();
-      const stop = req.stopsAt ? Number(req.stopsAt.seconds) : start + 3600;
+      const start = asset.startsAt ? Number(asset.startsAt.seconds)  : Date.now();
+      const stop = asset.stopsAt ? Number(asset.stopsAt.seconds) : start + 3600;
 
       /*const interfaceObj = await state.client.getObject({
         objectId: interfaceObjectId,
@@ -175,18 +178,18 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const tx = buildCreateListing({
         packageId: state.packageId,
         interfaceObjectId,
-        ingressId: req.ifIdIngress,
-        egressId: req.ifIdEgress,
+        ingressId: asset.ifIdIngress,
+        egressId: asset.ifIdEgress,
         asAuthCapId: state.asAuthCapId,
         sellerAuthTokenId: state.sellerAuthTokenId,
         isdAsId: isdAsIdToU64(isdAsId),
-        bandwidth: req.bandwidth as bigint,
+        bandwidth: BigInt(asset.bandwidth) ,
         startTime: BigInt(Math.floor(start)),
         expTime: BigInt(Math.floor(stop)),
-        timeGranularity: req.timeGranularity as bigint,
-        timeMinDuration: req.timeGranularity as bigint,
-        minBandwidth: req.bandwidthMin as bigint,
-        price: req.price as bigint,
+        timeGranularity: BigInt(asset.timeGranularity),
+        timeMinDuration: BigInt(asset.timeGranularity),
+        minBandwidth: BigInt(asset.bandwidthMin),
+        price: BigInt(asset.price),
         issuer: state.signer.getPublicKey().toSuiAddress(),
         coinType: DEFAULT_COIN_TYPE,
       });
@@ -212,10 +215,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           include: { json: true },
         });
 
-        const ownedAssets: Asset[] = result.objects
+        const ownedAssets: SearchAsset[] = result.objects
           .filter((obj: any) => obj.json != null)
           .map((obj: any) => SuiToRpcAsset(obj))
-          .filter((asset: Asset) => filterAsset(asset, _req));
+          .filter((asset: SearchAsset) => filterAsset(asset, _req));
 
         return new SearchAssetsResponse({assets: ownedAssets });
       } else {
@@ -223,7 +226,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           return listings
             .filter((obj: any) => !(obj instanceof Error) && obj.json != null)
             .map((obj: any) => ListingToQueryAsset(obj))
-            .filter((asset: Asset) => filterAsset(asset, _req));
+            .filter((asset: SearchAsset) => filterAsset(asset, _req));
         }
 
         if (_req.ia) {
@@ -250,7 +253,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             const listingObjs = await getAllListingsOf(interfaceObjId, state.client);
             console.log(listingObjs);
 
-            const assets: Asset[] = ListingsToAssets(listingObjs);
+            const assets: SearchAsset[] = ListingsToAssets(listingObjs);
             return new SearchAssetsResponse({ assets });
           } else {
             try {
@@ -295,7 +298,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         for (const asset of req.assets) {
           if (asset.startsAtExactly === undefined || asset.stopsAtExactly === undefined)
             throw new ConnectError(`must specify start and stop time for asset ${asset.assetId}`);
-          if (asset.bwExact === undefined)
+          if (asset.bandwidthExact === undefined)
             throw new ConnectError(`must specify exact bandwidth for asset ${asset.assetId}`);
         }
 
@@ -320,7 +323,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const unitPrice = BigInt(fields['price'] as string);
           const reqStart = BigInt(asset.startsAtExactly!.seconds);
           const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
-          const reqBw    = BigInt(asset.bwExact!);
+          const reqBw    = BigInt(asset.bandwidthExact!);
           const effectivePrice = (reqExp - reqStart) * reqBw * unitPrice;
           return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
         });
@@ -349,7 +352,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             listingId: meta.listingId,
             startTime: BigInt(asset.startsAtExactly!.seconds),
             expTime:   BigInt(asset.stopsAtExactly!.seconds),
-            bandwidth: BigInt(asset.bwExact!),
+            bandwidth: BigInt(asset.bandwidthExact!),
             coinType: DEFAULT_COIN_TYPE,
           }, slotCoin);
         }
@@ -381,12 +384,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async redeemAsset(req, _ctx) {
-      if(req.ifPairAssetId){
+      if(req.interfaces.case == "ifPairAssetId"){
         throw new ConnectError("IfPairAssetId not implemented");
       }else{
-        if(!(req.ingressAssetId && req.egressAssetId)) throw new ConnectError("Must specify ingress and egress Id, or interface pair id", Code.FailedPrecondition);    
-        const ingressId = '0x' + BigInt(req.ingressAssetId).toString(16).padStart(64, '0');
-        const egressId = '0x' + BigInt(req.egressAssetId).toString(16).padStart(64, '0');
+        const ingressAssetId = req.interfaces.value!.ingressAssetId;
+        const egressAssetId = req.interfaces.value!.egressAssetId;
+        if(!(ingressAssetId && egressAssetId)) throw new ConnectError("Must specify ingress and egress Id, or interface pair id", Code.FailedPrecondition);    
+        const ingressId = '0x' + BigInt(ingressAssetId).toString(16).padStart(64, '0');
+        const egressId = '0x' + BigInt(egressAssetId).toString(16).padStart(64, '0');
         console.log(ingressId);
         console.log(egressId);
         try {
@@ -418,8 +423,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             state.packageId,
             state.config.redemption.timeoutSecs * 1000,
           );
-          const ak = new TextDecoder().decode(delivery.encryptedReservation);
-          console.log(ak);
+          const authenticationKey = new TextDecoder().decode(delivery.encryptedReservation);
+          console.log(authenticationKey);
           console.log(delivery.resId);
 
           insertReservation(state.db, {
@@ -430,13 +435,13 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             bw:        delivery.bwRounded,
             startsAt,
             stopsAt,
-            ak,
+            ak:        authenticationKey,
           });
 
           return new RedeemAssetResponse({
-            ak,
-            resId: delivery.resId,
-            bwRounded: delivery.bwRounded,
+            authenticationKey: Uint8Array.from(authenticationKey),
+            reservationId: delivery.resId,
+            bandwidthRounded: delivery.bwRounded,
             bwDataplaneEncoding: delivery.bwDataplaneEncoding,
           });
         } catch (err) {
@@ -454,24 +459,24 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if (req.ia        !== undefined) filter.ia        = req.ia;
       if (req.ingressId !== undefined) filter.ingressId = req.ingressId;
       if (req.egressId  !== undefined) filter.egressId  = req.egressId;
-      if (req.bw        !== undefined) filter.bw        = req.bw;
+      if (req.bandwidth !== undefined) filter.bw = req.bandwidth;
       if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.toDate();
       if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.toDate();
       const rows = queryReservations(state.db, filter).filter(r => filterReservation(new Reservation({
-        ia: r.ia, ingressId: r.ingressId, egressId: r.egressId, bw: r.bw,
+        ia: r.ia, ingressId: r.ingressId, egressId: r.egressId, bandwidth: r.bw,
         startsAt: Timestamp.fromDate(r.startsAt), stopsAt: Timestamp.fromDate(r.stopsAt),
       }), req));
       console.log(rows);
       return new FetchReservationsResponse({
         reservations: rows.map(r => new Reservation({
-          resId:     r.resId,
+          reservationId:     r.resId,
           ia:        r.ia,
           ingressId: r.ingressId,
           egressId:  r.egressId,
-          bw:        r.bw,
+          bandwidth:        r.bw,
           startsAt:  Timestamp.fromDate(r.startsAt),
           stopsAt:   Timestamp.fromDate(r.stopsAt),
-          ak:        r.ak,
+          authenticationKey:        Uint8Array.from(r.ak),
         })),
       });
     },

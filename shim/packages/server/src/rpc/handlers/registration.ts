@@ -97,7 +97,7 @@ export function createRegistrationServiceImpl(
         await saveConfig(state.config);
       }
 
-      return new RegisterASResponse({ jwtPublisher: '', jwtRedemption: '' });
+      return new RegisterASResponse({ jwtPublisher: 'dummy-token', jwtRedemption: 'dummy-token' });
     },
   };
 }

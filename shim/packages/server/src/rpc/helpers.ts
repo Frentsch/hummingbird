@@ -1,20 +1,20 @@
-import { Asset } from "./gen/hummingbird/v1/marketplace_pb.js";
+import { SearchAsset } from "./gen/hummingbird/v1/marketplace_pb.js";
 import { Timestamp } from '@bufbuild/protobuf';
 
-function assetFromFields(objectId: string, assetFields: Record<string, unknown>, price: bigint): Asset {
+function assetFromFields(objectId: string, assetFields: Record<string, unknown>, price: number): SearchAsset {
     const ingressId = assetFields['if_ingress_id'] as number | null;
     const egressId = assetFields['if_egress_id'] as number | null;
     const start = BigInt(assetFields['start_time'] as string);
     const exp = BigInt(assetFields['exp_time'] as string);
-    return new Asset({
+    return new SearchAsset({
         assetId: BigInt(objectId).toString(),
         ia: BigInt(assetFields['isd_as_id'] as string),
         ...(ingressId ? { ifIdIngress: ingressId } : {}),
         ...(egressId ? { ifIdEgress: egressId } : {}),
-        bw: BigInt(assetFields['bandwidth'] as string),
+        bandwidth: assetFields['bandwidth'] as number,
         startsAt: new Timestamp({ seconds: start}),
         stopsAt: new Timestamp({ seconds: exp}),
-        timeGranularity: BigInt(assetFields['time_granularity'] as string),
+        timeGranularity: assetFields['time_granularity'] as number,
         price,
     });
 }
@@ -24,9 +24,9 @@ function assetFromFields(objectId: string, assetFields: Record<string, unknown>,
  * a HummingbirdAsset to an RPC Asset.
  * GraphQL JSON: structs are plain objects, no `fields` wrapper.
  */
-export function SuiToRpcAsset(obj: { objectId: string; json: Record<string, unknown> | null }): Asset {
+export function SuiToRpcAsset(obj: { objectId: string; json: Record<string, unknown> | null }): SearchAsset {
     const fields = obj.json ?? {};
-    return assetFromFields(obj.objectId, fields, 0n);
+    return assetFromFields(obj.objectId, fields, 0);
 }
 
 /**
@@ -34,12 +34,12 @@ export function SuiToRpcAsset(obj: { objectId: string; json: Record<string, unkn
  * GraphQL JSON: `asset` is a plain struct object (no `fields` wrapper).
  * UID values are canonical address strings.
  */
-export function ListingToQueryAsset(obj: { objectId: string; json: Record<string, unknown> | null }): Asset {
+export function ListingToQueryAsset(obj: { objectId: string; json: Record<string, unknown> | null }): SearchAsset {
     const fields = obj.json ?? {};
     const assetFields = fields['asset'] as Record<string, unknown>;
     console.log("asset fields:");
     console.log(assetFields);
-    const price = BigInt(fields['price'] as string);
+    const price = fields['price'] as number;
     return assetFromFields(obj.objectId, assetFields, price);
 }
 
