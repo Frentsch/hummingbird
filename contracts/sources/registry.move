@@ -126,7 +126,7 @@ module hummingbird::registry {
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        assert!(cap.isd_as_id == as_registry.isd_as_id && cap.exp >= clock.timestamp_ms(), EUnauthorized);
+        assert!(cap.isd_as_id == as_registry.isd_as_id && cap.exp >= clock.timestamp_ms() / 1000, EUnauthorized);
         assert!(!bag::contains(&as_registry.interfaces, interface_id), EInterfaceAlreadyExists);
         let interface = Interface {
             id: derived_object::claim(&mut as_registry.id, interface_id),

@@ -32,8 +32,8 @@ export function createReservationsCommand(): Command {
         if (opts.ingressId !== undefined) filter.ingressId = opts.ingressId;
         if (opts.egressId  !== undefined) filter.egressId  = opts.egressId;
         if (opts.bw        !== undefined) filter.bw        = opts.bw;
-        if (opts.startsAt  !== undefined) filter.startsAt  = new Date(opts.startsAt);
-        if (opts.stopsAt   !== undefined) filter.stopsAt   = new Date(opts.stopsAt);
+        if (opts.startsAt  !== undefined) filter.startsAt  = BigInt(Math.floor(new Date(opts.startsAt).getTime() / 1000));
+        if (opts.stopsAt   !== undefined) filter.stopsAt   = BigInt(Math.floor(new Date(opts.stopsAt).getTime() / 1000));
 
         const rows = queryReservations(db, filter);
         db.close();
@@ -68,8 +68,8 @@ export function createReservationsCommand(): Command {
             String(r.ingressId).padEnd(COL.ingress),
             String(r.egressId).padEnd(COL.egress),
             String(r.bw).padEnd(COL.bw),
-            r.startsAt.toISOString().padEnd(COL.startsAt),
-            r.stopsAt.toISOString().padEnd(COL.stopsAt),
+            new Date(Number(r.startsAt) * 1000).toISOString().padEnd(COL.startsAt),
+            new Date(Number(r.stopsAt) * 1000).toISOString().padEnd(COL.stopsAt),
             r.ak,
           ].join(' | '));
         }

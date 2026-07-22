@@ -11,9 +11,9 @@ export interface BuyAndTakeParams {
    * Must be passed as tx.pure.id() so it is BCS-encoded as a pure u256 value.
    */
   listingId: string;
-  /** Desired start time in ms since epoch (u64). */
+  /** Desired start time in seconds since epoch (u64). */
   startTime: bigint;
-  /** Desired expiry time in ms since epoch (u64). */
+  /** Desired expiry time in seconds since epoch (u64). */
   expTime: bigint;
   /** Desired bandwidth in kbps (u64). */
   bandwidth: bigint;

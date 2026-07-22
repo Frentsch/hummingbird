@@ -60,8 +60,8 @@ export async function startServer(configPath: string): Promise<void> {
       ingressId: parseInt(ev.ingressAssetId, 16),
       egressId: parseInt(ev.egressAssetId, 16),
       bw: ev.bandwidth,
-      startsAt: Timestamp.fromDate(new Date(Number(ev.startTime))),
-      stopsAt: Timestamp.fromDate(new Date(Number(ev.expTime))),
+      startsAt: new Timestamp({ seconds: ev.startTime }),
+      stopsAt: new Timestamp({ seconds: ev.expTime }),
       requestId: ev.requestId.toString(),
     });
     state.pendingRedemptions.set(ev.requestId, ev.requestObjectId);

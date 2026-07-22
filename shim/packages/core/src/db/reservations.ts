@@ -9,8 +9,8 @@ export interface ReservationRow {
   ingressId: number;
   egressId: number;
   bw: number;
-  startsAt: Date;
-  stopsAt: Date;
+  startsAt: bigint;
+  stopsAt: bigint;
   ak: string;
 }
 
@@ -19,8 +19,8 @@ export interface ReservationFilter {
   ingressId?: number;
   egressId?: number;
   bw?: number;
-  startsAt?: Date;
-  stopsAt?: Date;
+  startsAt?: bigint;
+  stopsAt?: bigint;
 }
 
 export function openReservationDb(path: string): SqliteDb {
@@ -59,8 +59,8 @@ export function insertReservation(
     row.ingressId,
     row.egressId,
     row.bw,
-    row.startsAt.getTime(),
-    row.stopsAt.getTime(),
+    row.startsAt,
+    row.stopsAt,
     row.ak,
   );
 }
@@ -72,8 +72,8 @@ interface RawRow {
   ingress_id: number;
   egress_id: number;
   bw: number;
-  starts_at: number;
-  stops_at: number;
+  starts_at: bigint;
+  stops_at: bigint;
   ak: string;
 }
 
@@ -88,8 +88,8 @@ export function queryReservations(
   if (filter.ingressId !== undefined) { conditions.push('ingress_id = ?'); params.push(filter.ingressId); }
   if (filter.egressId !== undefined)  { conditions.push('egress_id = ?');  params.push(filter.egressId); }
   if (filter.bw !== undefined)        { conditions.push('bw = ?');         params.push(filter.bw); }
-  if (filter.startsAt !== undefined)  { conditions.push('starts_at = ?');  params.push(filter.startsAt.getTime()); }
-  if (filter.stopsAt !== undefined)   { conditions.push('stops_at = ?');   params.push(filter.stopsAt.getTime()); }
+  if (filter.startsAt !== undefined)  { conditions.push('starts_at = ?');  params.push(filter.startsAt); }
+  if (filter.stopsAt !== undefined)   { conditions.push('stops_at = ?');   params.push(filter.stopsAt); }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const stmt = db.prepare<unknown[], RawRow>(`SELECT * FROM reservations ${where}`);
@@ -102,8 +102,8 @@ export function queryReservations(
     ingressId: Number(r.ingress_id),
     egressId:  Number(r.egress_id),
     bw:        Number(r.bw),
-    startsAt:  new Date(Number(r.starts_at)),
-    stopsAt:   new Date(Number(r.stops_at)),
+    startsAt:  r.starts_at,
+    stopsAt:   r.stops_at,
     ak:        r.ak,
   }));
 }

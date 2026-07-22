@@ -154,8 +154,8 @@ export function makeCallCommand(): Command {
           .requiredOption('--bandwidth <n>', 'Total bandwidth in kb/s (u64)', parseInt)
           .requiredOption('--start-time <s>', 'Start epoch seconds (u64)', parseInt)
           .requiredOption('--exp-time <s>', 'Expiry epoch seconds (u64)', parseInt)
-          .requiredOption('--time-granularity <n>', 'Minimum time slice in ms (u64)', parseInt)
-          .option('--time-min-duration <n>', 'Minimum purchasable duration in ms (u64, defaults to --time-granularity)', parseInt)
+          .requiredOption('--time-granularity <n>', 'Minimum time slice in seconds (u64)', parseInt)
+          .option('--time-min-duration <n>', 'Minimum purchasable duration in seconds (u64, defaults to --time-granularity)', parseInt)
           .requiredOption('--min-bandwidth <n>', 'Minimum bandwidth slice (u64)', parseInt)
           .requiredOption('--price <n>', 'Price in coin base units per unit bandwidth per time (u64)', parseInt),
       ),
@@ -290,8 +290,8 @@ export function makeCallCommand(): Command {
         const ingressFields = getObjectFields(ingressObj);
         const ia          = BigInt(ingressFields['isd_as_id'] as string);
         const ingressIfId = ingressFields['interface_id'] as number;
-        const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
-        const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
+        const startsAt    = BigInt(ingressFields['start_time'] as string);
+        const stopsAt     = BigInt(ingressFields['exp_time']   as string);
 
         const egressObj = await ctx.client.getObject({ objectId: opts.egressAssetId, include: { json: true } });
         const egressFields = getObjectFields(egressObj);

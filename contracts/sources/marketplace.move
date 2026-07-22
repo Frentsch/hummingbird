@@ -186,11 +186,11 @@ module hummingbird::marketplace {
         cap: &AsAuthCap,
         clock: &Clock,
     ) {
-        assert!(registry::cap_isd_as_id(cap) == registry::interface_isd_as_id(interface) && cap.cap_exp() >= clock.timestamp_ms(), EUnauthorized);
+        assert!(registry::cap_isd_as_id(cap) == registry::interface_isd_as_id(interface) && cap.cap_exp() >= clock.timestamp_ms() / 1000, EUnauthorized);
         let AssetListing<COIN> {
             id, interface: _, asset, price: _, seller: _,
         } = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
-        assert!(clock.timestamp_ms() >= hummingbird_asset::get_exp_time(&asset), EListingNotExpired);
+        assert!(clock.timestamp_ms() / 1000 >= hummingbird_asset::get_exp_time(&asset), EListingNotExpired);
         object::delete(id);
         hummingbird_asset::destroy(asset);
     }

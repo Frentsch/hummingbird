@@ -8,9 +8,9 @@
   },
   "sui": {
     "rpcUrl": "fullnode.testnet.sui.io:443",
-    "packageId": "0x34ee29bd2e99bb2972d4d007c39b669f601e6392bf10123d909ac27105d937af",
-    "globalRegistryId": "0xdb1cd6f68527a418586839593c1724eb98d1833981d1c8d16dbfa7df9d73c9a8",
-    "marketAdminCapId": "0x4109975c1eae64e3b644c9ea4808636d0ab35ae7a0140812d666907f6013ec3f",
+    "packageId": "0xba067205dc1f1b69d035e8674d41ec9cf7d270414ffed83f7e8971da0a187bd9",
+    "globalRegistryId": "0x1740ccb3a8ce6c172d1c71d491dd3083e3963a3c41513885742f612b864e4916",
+    "marketAdminCapId": "0x1592397f20f5148a5a27ce45a528d3167bce47e7a6a1aced47b95770ffbac166",
     "gasBudget": 50000000
   },
   "challenge": {

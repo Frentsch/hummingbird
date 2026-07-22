@@ -15,13 +15,13 @@ export interface CreateListingParams {
   egressId: number | undefined;
   /** Total bandwidth in kbps (u64). */
   bandwidth: bigint;
-  /** Listing start time in ms since epoch (u64). */
+  /** Listing start time in seconds since epoch (u64). */
   startTime: bigint;
-  /** Listing expiry time in ms since epoch (u64). */
+  /** Listing expiry time in seconds since epoch (u64). */
   expTime: bigint;
-  /** Time granularity in ms (u64). */
+  /** Time granularity in seconds (u64). */
   timeGranularity: bigint;
-  /** Minimum purchasable time slice in ms (u64). */
+  /** Minimum purchasable time slice in seconds (u64). */
   timeMinDuration: bigint;
   /** Minimum purchasable bandwidth in kbps (u64). */
   minBandwidth: bigint;

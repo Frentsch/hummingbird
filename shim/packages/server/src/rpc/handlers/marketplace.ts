@@ -153,7 +153,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
 
 
-      const start = asset.startsAt ? Number(asset.startsAt.seconds)  : Date.now();
+      const start = asset.startsAt ? Number(asset.startsAt.seconds)  : Math.floor(Date.now() / 1000);
       const stop = asset.stopsAt ? Number(asset.stopsAt.seconds) : start + 3600;
 
       /*const interfaceObj = await state.client.getObject({
@@ -388,8 +388,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         const asset = await state.client.getObject({objectId: interfacePairAssetId, include: {json: true}});
         const pairAsset = getHummingbirdAsset(asset);
         reservation.ia = pairAsset.isdAsId;
-        reservation.startsAt = new Date(Number(pairAsset.startTime));
-        reservation.stopsAt     = new Date(Number(pairAsset.expTime));
+        reservation.startsAt = pairAsset.startTime;
+        reservation.stopsAt     = pairAsset.expTime;
         reservation.ingressId = pairAsset.ifIngressId;
         reservation.egressId = pairAsset.ifEgressId;
         tx  = buildRedeemPair({packageId: state.packageId, interfacePairId: interfacePairAssetId, publicKey});
@@ -406,8 +406,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const ingressAsset = getHummingbirdAsset(ingressObj);
           reservation.ia          = ingressAsset.isdAsId;
           const ingressIfId = ingressAsset.ifIngressId;
-          reservation.startsAt    = new Date(Number(ingressAsset.startTime));
-          reservation.stopsAt     = new Date(Number(ingressAsset.expTime));
+          reservation.startsAt    = ingressAsset.startTime;
+          reservation.stopsAt     = ingressAsset.expTime;
 
           const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
           const egressAsset = getHummingbirdAsset(egressObj);
@@ -473,11 +473,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if (req.ingressId !== undefined) filter.ingressId = req.ingressId;
       if (req.egressId  !== undefined) filter.egressId  = req.egressId;
       if (req.bandwidth !== undefined) filter.bw = req.bandwidth;
-      if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.toDate();
-      if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.toDate();
+      if (req.startsAt  !== undefined) filter.startsAt  = req.startsAt.seconds;
+      if (req.stopsAt   !== undefined) filter.stopsAt   = req.stopsAt.seconds;
       const rows = queryReservations(state.db, filter).filter(r => filterReservation(new Reservation({
         ia: r.ia, ingressId: r.ingressId, egressId: r.egressId, bandwidth: r.bw,
-        startsAt: Timestamp.fromDate(r.startsAt), stopsAt: Timestamp.fromDate(r.stopsAt),
+        startsAt: new Timestamp({ seconds: r.startsAt }), stopsAt: new Timestamp({ seconds: r.stopsAt }),
       }), req));
       console.log(rows);
       return new FetchReservationsResponse({
@@ -487,8 +487,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           ingressId: r.ingressId,
           egressId:  r.egressId,
           bandwidth:        r.bw,
-          startsAt:  Timestamp.fromDate(r.startsAt),
-          stopsAt:   Timestamp.fromDate(r.stopsAt),
+          startsAt:  new Timestamp({ seconds: r.startsAt }),
+          stopsAt:   new Timestamp({ seconds: r.stopsAt }),
           authenticationKey:        new TextEncoder().encode(r.ak),
         })),
       });
