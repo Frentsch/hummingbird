@@ -108,26 +108,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if(asset.timeMinDuration>asset.stopsAt.seconds-asset.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
       try{
-        // as registry is now created during registration
-        // TODO remove
-      //create as registry if not existing
-      /*
-      const derivedAsRegistryId = deriveObjectID(state.config.package.globalRegistryId, 'u64', bcs.U64.serialize(isdAsIdToU64(isdAsId)).toBytes());
-      console.log(derivedAsRegistryId);
-      const { objects: [asRegistryResult] } = await state.client.getObjects({ objectIds: [derivedAsRegistryId] });
-      if (asRegistryResult instanceof Error) {
-        const result = await executeTransaction(state.client, state.signer,
-          buildRegisterAs({
-            packageId: state.config.package.id,
-            globalRegistryId: state.config.package.globalRegistryId,
-            isdAsId: isdAsIdToU64(isdAsId)
-          })
-        );
-        state.config.as.asAuthCapId = extractCreatedObjectId(result, getObjectType(state.config.package.id, "registry", "AsAuthCap"));
-      }*/
-      //state.config.as.asRegistryId = derivedAsRegistryId;
-      //saveConfig(state.config);
-
       //create interface if not exists
       const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
       const interfaceObjectId = deriveObjectID(state.config.as.asRegistryId, 'u16',  bcs.U16.serialize(ifId).toBytes());
@@ -204,13 +184,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
       const result = await executeTransaction(state.client, state.signer, tx);
 
-      // Find the first created object in effects.
-      const created = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
-      //TODO this seems to not return the correct object. Check if there are multiple objects in created an filter for the listing ID
+      const created = extractCreatedObjectId(
+        result,
+        getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
+      );
       return new PublishAssetResponse({ assetId: BigInt(created).toString() });
     }catch(error){
       console.log(error);
-      throw new ConnectError("error");
+      throw new ConnectError(`Failed to publish asset: ${error}`, Code.Internal);
     }
     },
 
