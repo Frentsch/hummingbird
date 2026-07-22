@@ -6,6 +6,7 @@ module hummingbird::registry {
     use sui::event;
     use sui::derived_object;
     use sui::object_bag::{Self, ObjectBag};
+    use sui::clock::{Self, Clock};
 
     const EAsAlreadyRegistered: u64 = 0;
     const EInterfaceAlreadyExists: u64 = 1;
@@ -89,6 +90,7 @@ module hummingbird::registry {
     }
 
     /// Register a new AS. Returns an AsAuthCap transferred to the caller.
+    /// TODO merge this with register_as_for
     fun register_as(
         global: &mut GlobalRegistry,
         isd_as_id: u64,
@@ -121,9 +123,10 @@ module hummingbird::registry {
         as_registry: &mut AsRegistry,
         cap: &AsAuthCap,
         interface_id: u16,
+        clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        assert!(cap.isd_as_id == as_registry.isd_as_id, EUnauthorized);
+        assert!(cap.isd_as_id == as_registry.isd_as_id && cap.exp >= clock.timestamp_ms(), EUnauthorized);
         assert!(!bag::contains(&as_registry.interfaces, interface_id), EInterfaceAlreadyExists);
         let interface = Interface {
             id: derived_object::claim(&mut as_registry.id, interface_id),

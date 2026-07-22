@@ -52,8 +52,7 @@ module hummingbird::marketplace {
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
-        assert!(registry::cap_exp(cap) >= clock.timestamp_ms(), EAuthExpired);
-        registry::create_interface(as_registry, cap, interface_id, ctx);
+        registry::create_interface(as_registry, cap, interface_id,clock, ctx);
     }
 
     // --- Seller registration ---

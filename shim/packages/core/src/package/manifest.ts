@@ -30,7 +30,6 @@ export const OPERATIONS = {
     fn: 'register_seller_to_sender',
     typeArgCount: 0,
   },
-  // "createInterface" in the plan = create_interface in Move.
   // An Interface object represents the per-(isd_as_id, interface_id) "interface".
   createInterface: {
     name: 'createInterface',
