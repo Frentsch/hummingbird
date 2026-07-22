@@ -97,7 +97,7 @@ export function queryReservations(
 
   return stmt.all(...params).map((r: RawRow) => ({
     key:       Number(r.key),
-    resId:     r.res_id,
+    resId:     Number(r.res_id),
     ia:        r.ia,
     ingressId: Number(r.ingress_id),
     egressId:  Number(r.egress_id),

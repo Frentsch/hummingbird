@@ -36,7 +36,7 @@ export class DeliveryListener {
 
   /**
    * Watch checkpoints until a ReservationDelivered event appears in a transaction
-   * that also deletes redeemRequestObjectId (proving it is the matching delivery).
+   * with a matching redeem_request_id.
    * Rejects with DeliveryTimeoutError on timeout.
    */
   async waitForDelivery(

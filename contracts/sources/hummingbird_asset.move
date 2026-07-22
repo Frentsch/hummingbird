@@ -241,7 +241,7 @@ module hummingbird::hummingbird_asset {
     // --- Redeem flow ---
 
     /// Buyer sends ingress + egress pair to the AS for data-plane key exchange.
-    public entry fun redeem(
+    public fun redeem(
         mut ingress_asset: HummingbirdAsset,
         egress_asset: HummingbirdAsset,
         public_key: vector<u8>,

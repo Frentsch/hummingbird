@@ -18,6 +18,8 @@ export type { BuyAndTakeParams } from './buyAndTake.js';
 
 export { buildRedeem } from './redeem.js';
 export type { RedeemParams } from './redeem.js';
+export { buildRedeemPair } from './redeem.js';
+export type { RedeemPairParams } from './redeem.js';
 
 export { buildDeliverReservation } from './deliverReservation.js';
 export type { DeliverReservationParams } from './deliverReservation.js';

@@ -13,5 +13,6 @@ export { ConfigSchema, loadConfig, saveConfig } from './config.js';
 export type { Config } from './config.js';
 export * from './helpers.js';
 export * from './helpers/registry.js';
+export * from './types/index.js';
 export { openReservationDb, insertReservation, queryReservations } from './db/reservations.js';
 export type { ReservationRow, ReservationFilter, SqliteDb } from './db/reservations.js';

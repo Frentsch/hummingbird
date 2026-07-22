@@ -1,22 +1,20 @@
 import { SearchAsset } from "./gen/hummingbird/v1/marketplace_pb.js";
 import { Timestamp } from '@bufbuild/protobuf';
+import { parseHummingbirdAssetFields } from '@sui-shim/core';
 
 function assetFromFields(objectId: string, assetFields: Record<string, unknown>, price: number): SearchAsset {
-    const ingressId = assetFields['if_ingress_id'] as number | null;
-    const egressId = assetFields['if_egress_id'] as number | null;
-    const start = BigInt(assetFields['start_time'] as string);
-    const exp = BigInt(assetFields['exp_time'] as string);
+    const asset = parseHummingbirdAssetFields(assetFields);
     return new SearchAsset({
         assetId: BigInt(objectId).toString(),
-        ia: BigInt(assetFields['isd_as_id'] as string),
-        ...(ingressId ? { ifIdIngress: ingressId } : {}),
-        ...(egressId ? { ifIdEgress: egressId } : {}),
-        bandwidth: Number(assetFields['bandwidth']),
+        ia: asset.isdAsId,
+        ...(asset.ifIngressId !== null ? { ifIdIngress: asset.ifIngressId } : {}),
+        ...(asset.ifEgressId !== null ? { ifIdEgress: asset.ifEgressId } : {}),
+        bandwidth: Number(asset.bandwidth),
         bandwidthMin: 0,
-        bandwidthMax: Number(assetFields['bandwidth']),
-        startsAt: new Timestamp({ seconds: start}),
-        stopsAt: new Timestamp({ seconds: exp}),
-        timeGranularity: Number(assetFields['time_granularity']),
+        bandwidthMax: Number(asset.bandwidth),
+        startsAt: new Timestamp({ seconds: asset.startTime }),
+        stopsAt: new Timestamp({ seconds: asset.expTime }),
+        timeGranularity: Number(asset.timeGranularity),
         timeMinDuration: 0,
         price,
     });

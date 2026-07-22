@@ -61,6 +61,12 @@ export const OPERATIONS = {
     fn: 'redeem',
     typeArgCount: 0,
   },
+  redeemPair: {
+    name: 'redeemPair',
+    module: 'hummingbird_asset',
+    fn: 'redeem_pair',
+    typeArgCount: 0,
+  },
   deliverReservation: {
     name: 'deliverReservation',
     module: 'hummingbird_asset',

@@ -42,12 +42,16 @@ import {
   buildRegisterSeller,
   saveConfig,
   isdAsIdToU64,
+  buildRedeemPair,
+  getHummingbirdAsset,
 } from '@sui-shim/core';
-import type { ReservationFilter } from '@sui-shim/core';
+import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 import { assert } from 'node:console';
 import { requestHeaderWithCompression } from '@connectrpc/connect/protocol-connect';
+import { text } from 'node:stream/consumers';
+import { bigint } from 'zod';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -202,7 +206,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
       // Find the first created object in effects.
       const created = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
-
+      //TODO this seems to not return the correct object. Check if there are multiple objects in created an filter for the listing ID
       return new PublishAssetResponse({ assetId: BigInt(created).toString() });
     }catch(error){
       console.log(error);
@@ -368,10 +372,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
         // BalanceChange.address (new API) replaced old .owner.AddressOwner
         const balanceChange = result.balanceChanges?.find(c => c.address === state.signer.toSuiAddress());
-        const cost = BigInt(-Number(balanceChange?.amount ?? 0));
-
+        var cost = BigInt(-Number(balanceChange?.amount ?? 0));
+        // the returned cost must fit an unsigned integer, but in some cases the storage rebate is higher than the transaction cost leading to a gain (negative cost). 
+        // In practice this should never happpen assuming assets prices are set properly, but when testing with small values this might happen 
+        cost = cost<0n?0n:cost; 
         const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
-        return new BuyAssetsResponse({ assets: bought, cost });
+        return new BuyAssetsResponse({ assets: bought, cost});
       } catch (error) {
         console.log(error);
         if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
@@ -388,8 +394,25 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async redeemAsset(req, _ctx) {
+      var tx: Transaction;
+      //TODO generate and store the private/public key pair somewhere
+      const publicKey = new Uint8Array(32);
+      var reservation: Record<string, any> = {};
       if(req.interfaces.case == "ifPairAssetId"){
-        throw new ConnectError("IfPairAssetId not implemented");
+        const interfacePairId = req.interfaces.value;
+        console.log(interfacePairId);
+        if(!interfacePairId) throw new ConnectError("Must specify if_pair_asset_id", Code.InvalidArgument);
+        //TODO add a conversion helper function
+        const interfacePairAssetId = '0x' + BigInt(interfacePairId).toString(16).padStart(64,'0');
+        const asset = await state.client.getObject({objectId: interfacePairAssetId, include: {json: true}});
+        const pairAsset = getHummingbirdAsset(asset);
+        reservation.ia = pairAsset.isdAsId;
+        reservation.startsAt = new Date(Number(pairAsset.startTime));
+        reservation.stopsAt     = new Date(Number(pairAsset.expTime));
+        reservation.ingressId = pairAsset.ifIngressId;
+        reservation.egressId = pairAsset.ifEgressId;
+        tx  = buildRedeemPair({packageId: state.packageId, interfacePairId: interfacePairAssetId, publicKey});
+
       }else{
         const ingressAssetId = req.interfaces.value!.ingressAssetId;
         const egressAssetId = req.interfaces.value!.egressAssetId;
@@ -398,23 +421,26 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         const egressId = '0x' + BigInt(egressAssetId).toString(16).padStart(64, '0');
         console.log(ingressId);
         console.log(egressId);
-        try {
           const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
-          const ingressFields = getObjectFields(ingressObj);
-          const ia          = BigInt(ingressFields['isd_as_id'] as string);
-          const ingressIfId = ingressFields['if_ingress_id'] as number;
-          const startsAt    = new Date(Number(BigInt(ingressFields['start_time'] as string)));
-          const stopsAt     = new Date(Number(BigInt(ingressFields['exp_time']   as string)));
+          const ingressAsset = getHummingbirdAsset(ingressObj);
+          reservation.ia          = ingressAsset.isdAsId;
+          const ingressIfId = ingressAsset.ifIngressId;
+          reservation.startsAt    = new Date(Number(ingressAsset.startTime));
+          reservation.stopsAt     = new Date(Number(ingressAsset.expTime));
 
           const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
-          const egressFields = getObjectFields(egressObj);
-          const egressIfId  = egressFields['if_egress_id'] as number;
+          const egressAsset = getHummingbirdAsset(egressObj);
+          const egressIfId  = egressAsset.ifEgressId;
           console.log(ingressObj);
           console.log(egressObj);
           if(!(ingressIfId&&egressIfId)) throw new ConnectError("Asset Mismatch. Ingress asset must have ingress id set. Egress asset must have egress id set", Code.FailedPrecondition);
           const publicKey = new Uint8Array(32);
 
-          const tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
+          tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
+          reservation.ingressId = ingressIfId;
+          reservation.egressId = egressIfId;
+      }
+      try{
           const result = await executeTransaction(state.client, state.signer, tx);
 
           const redeemRequestObjectId = extractCreatedObjectId(
@@ -430,8 +456,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const authenticationKey = new TextDecoder().decode(delivery.encryptedReservation);
           console.log(authenticationKey);
           console.log(delivery.resId);
-
-          insertReservation(state.db, {
+          reservation.resId = delivery.resId;
+          reservation.bw = delivery.bwRounded;
+          reservation.ak = authenticationKey;
+          /*insertReservation(state.db, {
             resId:     delivery.resId,
             ia,
             ingressId: ingressIfId,
@@ -440,10 +468,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             startsAt,
             stopsAt,
             ak:        authenticationKey,
-          });
+          });*/
+          insertReservation(state.db, reservation as ReservationRow);
 
           return new RedeemAssetResponse({
-            authenticationKey: Uint8Array.from(authenticationKey),
+            authenticationKey: new TextEncoder().encode(authenticationKey),
             reservationId: delivery.resId,
             bandwidthRounded: delivery.bwRounded,
             bwDataplaneEncoding: delivery.bwDataplaneEncoding,
@@ -455,7 +484,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           }
           throw err;
         }
-    }
     },
 
     fetchReservations(req, _ctx) {
@@ -480,7 +508,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           bandwidth:        r.bw,
           startsAt:  Timestamp.fromDate(r.startsAt),
           stopsAt:   Timestamp.fromDate(r.stopsAt),
-          authenticationKey:        Uint8Array.from(r.ak),
+          authenticationKey:        new TextEncoder().encode(r.ak),
         })),
       });
     },
@@ -522,9 +550,9 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         state.client.getObject({ objectId: assetId2, include: { json: true } }),
       ]);
 
-      const fields1 = getObjectFields(obj1);
-      const fields2 = getObjectFields(obj2);
-      const fuseFunction = fields1.bandwidth === fields2.bandwidth ? 'fuse_time' : 'fuse_bandwidth';
+      const asset1 = getHummingbirdAsset(obj1);
+      const asset2 = getHummingbirdAsset(obj2);
+      const fuseFunction = asset1.bandwidth === asset2.bandwidth ? 'fuse_time' : 'fuse_bandwidth';
 
       const gasBudget = BigInt(state.config.transaction.gasBudget);
       const tx = new Transaction();

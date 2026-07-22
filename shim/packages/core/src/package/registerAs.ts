@@ -14,6 +14,8 @@ export interface RegisterAsParams {
  * Transfers AsAuthCap to the signer's address on success.
  */
 export function buildRegisterAs(params: RegisterAsParams): Transaction {
+  throw new Error("Register AS is deprecated. To register a new AS, follow the account registration")
+  /*
   const tx = new Transaction();
   tx.moveCall({
     target: moveTarget(params.packageId, 'registerAs'),
@@ -22,5 +24,5 @@ export function buildRegisterAs(params: RegisterAsParams): Transaction {
       tx.pure.u64(params.isdAsId),
     ],
   });
-  return tx;
+  return tx;*/
 }

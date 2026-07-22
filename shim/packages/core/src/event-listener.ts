@@ -51,6 +51,10 @@ export class EventListener {
   readonly #myAddress: string;
   readonly #onRedeem: RedeemEventHandler;
   readonly #eventType: string;
+  //TODO persist the cursor so that old events don't get looked at again. 
+  // This shouldn't be causing any issues because processed reservations 
+  // release the ReservationReqeust object, so they are only processed once, 
+  // but it could become a large overhead.
   #cursor: string | null = null;
   #stopped = false;
 

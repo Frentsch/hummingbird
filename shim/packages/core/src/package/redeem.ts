@@ -11,6 +11,11 @@ export interface RedeemParams {
   publicKey: Uint8Array;
 }
 
+export interface RedeemPairParams {
+  packageId: string;
+  interfacePairId: string;
+  publicKey: Uint8Array;
+}
 /**
  * Build a PTB that calls hummingbird_asset::redeem.
  * Consumes both assets and creates a RedeemRequest transferred to the AS issuer.
@@ -25,6 +30,18 @@ export function buildRedeem(params: RedeemParams): Transaction {
       tx.object(params.egressAssetId),
       tx.pure.vector('u8', Array.from(params.publicKey)),
     ],
+  });
+  return tx;
+}
+
+export function buildRedeemPair(params: RedeemPairParams): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: moveTarget(params.packageId, 'redeemPair'),
+      arguments: [
+        tx.object(params.interfacePairId),
+        tx.pure.vector('u8', Array.from(params.publicKey)),
+      ],
   });
   return tx;
 }
