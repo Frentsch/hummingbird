@@ -1,0 +1,38 @@
+#right now only grpc port is needed, but rest is here so that we can resuse the config scheme from core
+[grpc]
+port = 9091
+
+
+[network]
+name = "testnet"
+grpcUrl = "fullnode.testnet.sui.io:443"
+
+[keystore]
+path = "/home/frentsch/.sui/sui_config/sui.keystore"
+
+[http]
+port = 8082
+token = "some-bearer-token"
+
+[package]
+id = "0x34ee29bd2e99bb2972d4d007c39b669f601e6392bf10123d909ac27105d937af"
+globalRegistryId = "0xdb1cd6f68527a418586839593c1724eb98d1833981d1c8d16dbfa7df9d73c9a8"
+
+[as]
+isdAsId = "1-ff00:0:111"
+asRegistryId = "0x8304002a4e76d505ec2e34ad745a8f834cf7e99a7bedc30f7a378350fe14e63f"
+asAuthCapId = "0x8b17716db893d9e40f1bcc176ce206c7dd6a2e76db2f7de266625db95735adca"
+sellerAuthTokenId = "0x47eba139c4fafe6433d9803da067ddb2bbb904bf221ec3586742e391fbdb76e7"
+interfaces = [ "0x66cfd8708c083f60407b74f824239e28ebafbdaf14ad01faf95c27ee2b85fd17", "0x765c68d5c4ed4b3d882c231c17185677fa503fcc804dccf4db12ad09090fea96" ]
+
+[redemption]
+timeoutSecs = 60
+
+[db]
+path = "./reservations.db"
+
+[transaction]
+gasBudget = 50000000
+
+[authServer]
+url = "http://localhost:9092"

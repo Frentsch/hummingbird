@@ -1,11 +1,11 @@
 import { createClient } from '@connectrpc/connect';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { RedemptionService } from './rpc/gen/hummingbird/v1/redemption_connect.js';
+import { RedemptionService } from './gen/hummingbird/v1/redemption_connect.js';
 import {
   RedeemAssetFromASResponse,
   RedeemAssetFromASRequest,
   ReservationInfo,
-} from './rpc/gen/hummingbird/v1/redemption_pb.js';
+} from './gen/hummingbird/v1/redemption_pb.js';
 
 export async function startRedeemService(grpcPort: number): Promise<void> {
   const transport = createGrpcTransport({

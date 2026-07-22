@@ -11,9 +11,16 @@ cd auth-server
 go build cmd/auth-server/main.go
 ./main
 
+# 2b. (testing only) Start MockAS instead of a real AS
+# Answers every RedeemAssetFromASRequest with a canned response, useful for
+# exercising the redemption flow without a real auth server.
+cd shim
+pnpm --filter @sui-shim/mock-as start
+
 # 3. Register AS
-Currently requires the pubkey to be stored in auth-server/data/certs.
+Currently requires the pubkey to be stored in auth-server/data/certs for vverification.
 Follow the steps for registration as outlined in Justins tool (marketplace_account_client). Set marketplace_account_api to http://localhost:9091
+Note that the jwt tokens returned are not needed since the local shim holds all crpytographic materials needed to interact with the marketplace.
 
 # 4. Use Justin's tool to interact with the blockchain.
 marketplace_client/main.go

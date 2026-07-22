@@ -1,10 +1,6 @@
 #!/bin/bash
 set -e
 
-pnpm exec sui-shim call register-as \
-  --isd-as-id 3 \
-  --set-active
-
 pnpm exec sui-shim call register-seller --set-active
 
 pnpm exec sui-shim call create-interface \

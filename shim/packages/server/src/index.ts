@@ -21,7 +21,6 @@ import { createRpcRoutes } from './rpc/handler.js';
 import { pendingRedeemRequests } from './rpc/handlers/redemption.js';
 import { RedeemAssetFromASRequest } from './rpc/gen/hummingbird/v1/redemption_pb.js';
 import { authInterceptor } from './rpc/auth-interceptor.js';
-import { startRedeemService } from './redeem-service.js';
 import { Timestamp } from '@bufbuild/protobuf';
 
 export async function startServer(configPath: string): Promise<void> {
@@ -118,9 +117,6 @@ export async function startServer(configPath: string): Promise<void> {
 
   rpcServer.listen(config.grpc.port, () => {
     console.log(`[debug] [gRPC/Connect] listening on port ${config.grpc.port} (HTTP/1.1 + HTTP/2)`);
-    startRedeemService(config.grpc.port).catch((err) => {
-      console.error('[RedeemService] fatal error:', err);
-    });
   });
 
   const shutdown = () => {
