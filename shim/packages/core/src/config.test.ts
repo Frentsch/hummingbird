@@ -15,10 +15,6 @@ name = "testnet"
 [keystore]
 path = "/tmp/sui.keystore"
 
-[http]
-port = 8080
-token = "supersecrettoken"
-
 [grpc]
 port = 9090
 
@@ -33,8 +29,6 @@ describe('loadConfig', () => {
     try {
       const cfg = await loadConfig(path);
       expect(cfg.network.name).toBe('testnet');
-      expect(cfg.http.port).toBe(8080);
-      expect(cfg.http.token).toBe('supersecrettoken');
       expect(cfg.grpc.port).toBe(9090);
     } finally {
       await unlink(path);
@@ -48,17 +42,6 @@ describe('loadConfig', () => {
   it('throws on invalid network name', async () => {
     const path = makeTempPath();
     await writeFile(path, VALID_TOML.replace('testnet', 'badnet'), 'utf-8');
-    try {
-      await expect(loadConfig(path)).rejects.toThrow(/Invalid config/);
-    } finally {
-      await unlink(path);
-    }
-  });
-
-  it('throws on missing http.token', async () => {
-    const path = makeTempPath();
-    const noToken = VALID_TOML.replace('token = "supersecrettoken"', '');
-    await writeFile(path, noToken, 'utf-8');
     try {
       await expect(loadConfig(path)).rejects.toThrow(/Invalid config/);
     } finally {

@@ -44,6 +44,7 @@ import {
   isdAsIdToU64,
   buildRedeemPair,
   getHummingbirdAsset,
+  openSealed,
 } from '@sui-shim/core';
 import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
@@ -51,7 +52,7 @@ import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
 import { assert } from 'node:console';
 import { requestHeaderWithCompression } from '@connectrpc/connect/protocol-connect';
 import { text } from 'node:stream/consumers';
-import { bigint } from 'zod';
+import { bigint, config } from 'zod';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -377,7 +378,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     async redeemAsset(req, _ctx) {
       var tx: Transaction;
       //TODO generate and store the private/public key pair somewhere
-      const publicKey = new Uint8Array(32);
+      const publicKey = state.authKeypair.publicKey;
       var reservation: Record<string, any> = {};
       if(req.interfaces.case == "ifPairAssetId"){
         const interfacePairId = req.interfaces.value;
@@ -434,7 +435,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             state.packageId,
             state.config.redemption.timeoutSecs * 1000,
           );
-          const authenticationKey = new TextDecoder().decode(delivery.encryptedReservation);
+          const authKey = await openSealed(state.authKeypair,delivery.encryptedReservation);
+          const authenticationKey = new TextDecoder().decode(authKey);
           console.log(authenticationKey);
           console.log(delivery.resId);
           reservation.resId = delivery.resId;

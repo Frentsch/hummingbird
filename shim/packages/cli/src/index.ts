@@ -2,7 +2,6 @@
 import { Command } from 'commander';
 import { makeDaemonCommand } from './commands/daemon.js';
 import { makeCallCommand } from './commands/call.js';
-import { makeCallersCommand } from './commands/callers.js';
 import { makeKeysCommand } from './commands/keys.js';
 import { createReservationsCommand } from './commands/reservations.js';
 
@@ -12,7 +11,6 @@ const program = new Command('sui-shim')
 
 program.addCommand(makeDaemonCommand());
 program.addCommand(makeCallCommand());
-program.addCommand(makeCallersCommand());
 program.addCommand(makeKeysCommand());
 program.addCommand(createReservationsCommand());
 

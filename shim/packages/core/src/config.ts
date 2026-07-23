@@ -15,10 +15,6 @@ export const ConfigSchema = z.object({
     path: z.string(),
     address: z.string().optional(),
   }),
-  http: z.object({
-    port: z.number().int().min(1).max(65535).default(8080),
-    token: z.string().min(1),
-  }),
   grpc: z.object({
     port: z.number().int().min(1).max(65535).default(9090),
   }),
@@ -39,6 +35,9 @@ export const ConfigSchema = z.object({
   db: z.object({
     path: z.string(),
   }).default({ path: './reservations.db' }),
+  crypto: z.object({
+    authKeyPath: z.string(),
+  }).default({ authKeyPath: './auth-keypair.json' }),
   transaction: z.object({
     gasBudget: z.number().int().min(0).default(5_000_000),
   }).default({ gasBudget: 5_000_000 }),

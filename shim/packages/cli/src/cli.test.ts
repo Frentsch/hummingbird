@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { Command } from 'commander';
 import { makeDaemonCommand } from './commands/daemon.js';
 import { makeCallCommand } from './commands/call.js';
-import { makeCallersCommand } from './commands/callers.js';
 import { makeKeysCommand } from './commands/keys.js';
 
 function makeTestProgram(): Command {
@@ -10,7 +9,6 @@ function makeTestProgram(): Command {
     .exitOverride()
     .addCommand(makeDaemonCommand())
     .addCommand(makeCallCommand())
-    .addCommand(makeCallersCommand())
     .addCommand(makeKeysCommand());
 }
 
@@ -35,16 +33,6 @@ describe('CLI command structure', () => {
     expect(subNames).toContain('deliver-reservation');
     expect(subNames).toContain('delist-and-take');
     expect(subNames).toHaveLength(8);
-  });
-
-  it('program has callers command with list/add/remove subcommands', () => {
-    const prog = makeTestProgram();
-    const callers = prog.commands.find((c) => c.name() === 'callers');
-    expect(callers).toBeDefined();
-    const subNames = callers!.commands.map((c) => c.name());
-    expect(subNames).toContain('list');
-    expect(subNames).toContain('add');
-    expect(subNames).toContain('remove');
   });
 
   it('program has keys command with list subcommand', () => {

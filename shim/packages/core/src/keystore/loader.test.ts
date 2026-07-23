@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { toBase64 } from '@mysten/bcs';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { loadKeypairs } from './loader.js';
-import { PlaintextUnlocker } from './unlocker.js';
 import { resolveSigner } from './signer.js';
 import { KeystoreError } from '../errors.js';
 import { writeFile, unlink } from 'node:fs/promises';
@@ -25,14 +24,14 @@ function makeEntry(secretKey: Uint8Array): { entry: string; keypair: Ed25519Keyp
 }
 
 describe('loadKeypairs', () => {
-  it('loads a single 33-byte entry through PlaintextUnlocker', async () => {
+  it('loads a single 33-byte entry', async () => {
     const secret = new Uint8Array(randomBytes(32));
     const { entry, keypair } = makeEntry(secret);
     const path = join(tmpdir(), `sui-shim-test-${Date.now()}.keystore`);
     await writeFile(path, JSON.stringify([entry]), 'utf-8');
 
     try {
-      const keypairs = await loadKeypairs({ path, unlocker: new PlaintextUnlocker() });
+      const keypairs = await loadKeypairs({ path });
       expect(keypairs).toHaveLength(1);
       expect(keypairs[0]!.toSuiAddress()).toBe(keypair.toSuiAddress());
     } finally {

@@ -10,10 +10,6 @@ grpcUrl = "fullnode.testnet.sui.io:443"
 [keystore]
 path = "/home/frentsch/.sui/sui_config/sui.keystore"
 
-[http]
-port = 8082
-token = "some-bearer-token"
-
 [package]
 id = "0x34ee29bd2e99bb2972d4d007c39b669f601e6392bf10123d909ac27105d937af"
 globalRegistryId = "0xdb1cd6f68527a418586839593c1724eb98d1833981d1c8d16dbfa7df9d73c9a8"

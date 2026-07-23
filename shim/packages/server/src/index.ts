@@ -1,7 +1,6 @@
 import { createServer as createTcpServer } from 'node:net';
 import { createServer as createHttp1Server } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
-import { serve } from '@hono/node-server';
 import { connectNodeAdapter, compressionGzip } from '@connectrpc/connect-node';
 import {
   createSuiClient,
@@ -10,13 +9,12 @@ import {
   resolveSigner,
   EventListener,
   DeliveryListener,
-  PlaintextUnlocker,
   loadConfig,
   openReservationDb,
+  loadOrCreateAuthKeypair,
 } from '@sui-shim/core';
 import type { RedeemEvent } from '@sui-shim/core';
 import type { AppState } from './state.js';
-import { createHttpRouter } from './http/router.js';
 import { createRpcRoutes } from './rpc/handler.js';
 import { pendingRedeemRequests } from './rpc/handlers/redemption.js';
 import { RedeemAssetFromASRequest } from './rpc/gen/hummingbird/v1/redemption_pb.js';
@@ -27,20 +25,20 @@ export async function startServer(configPath: string): Promise<void> {
   const config = await loadConfig(configPath);
   const client = createSuiClient(config.network.name);
 
-  const keypairs = await loadKeypairs({
-    path: config.keystore.path,
-    unlocker: new PlaintextUnlocker(),
-  });
-  const signer = resolveSigner(keypairs, config.keystore.address);
+  const suiKeypairs = await loadKeypairs({ path: config.keystore.path });
+  const signer = resolveSigner(suiKeypairs, config.keystore.address);
 
   const grpcClient = createSuiGrpcClient(config.network.name, config.network.grpcUrl);
   const deliveryListener = new DeliveryListener(grpcClient);
   const db = openReservationDb(config.db.path);
+  
+  const authKeypair = await loadOrCreateAuthKeypair(config.crypto.authKeyPath);
 
   const state: AppState = {
     config,
     client,
     signer,
+    authKeypair,
     packageId: config.package.id,
     globalRegistryId: config.package.globalRegistryId ?? '',
     asRegistryId: config.as.asRegistryId ?? '',
@@ -49,6 +47,7 @@ export async function startServer(configPath: string): Promise<void> {
     interfaceObjects: new Map(),
     deliveryListener,
     pendingRedemptions: new Map(),
+    pendingRedemptionKeys: new Map(),
     db,
     authServerUrl: config.authServer?.url,
   };
@@ -65,18 +64,14 @@ export async function startServer(configPath: string): Promise<void> {
       requestId: ev.requestId.toString(),
     });
     state.pendingRedemptions.set(ev.requestId, ev.requestObjectId);
-    for (const enqueue of pendingRedeemRequests.values()) {
-      enqueue(req);
-    }
+    state.pendingRedemptionKeys.set(ev.requestId, ev.publicKey);
+    // Only one AS is ever connected at a time, so there's at most one entry.
+    const enqueue = pendingRedeemRequests.values().next().value;
+    enqueue?.(req);
   };
 
   const eventListener = new EventListener(client, grpcClient, config.package.id, myAddress, onRedeem);
   eventListener.start();
-
-  const httpApp = createHttpRouter(state);
-  serve({ fetch: httpApp.fetch, port: config.http.port }, (info) => {
-    console.log(`[HTTP] listening on port ${info.port}`);
-  });
 
   const rpcHandler = connectNodeAdapter({
     routes: (router) => {

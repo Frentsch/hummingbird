@@ -10,7 +10,6 @@ import {
   buildDelistAndTake,
   DEFAULT_COIN_TYPE,
   loadKeypairs,
-  PlaintextUnlocker,
   extractCreatedObjectId,
   getObjectType,
   saveConfig,

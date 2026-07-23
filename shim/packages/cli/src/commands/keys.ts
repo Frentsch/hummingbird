@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { KeystoreError, loadKeypairs, PlaintextUnlocker } from '@sui-shim/core';
+import { KeystoreError, loadKeypairs } from '@sui-shim/core';
 import { loadConfig } from '@sui-shim/core';
 import { type CliCtx } from '../ctx.js';
 
@@ -12,7 +12,7 @@ export function makeKeysCommand(): Command {
       .option('-c, --config <path>', 'Path to shim.toml', 'shim.toml')
       .action(async (opts: { config: string }) => {
         const config = await loadConfig(opts.config);
-        const keypairs = await loadKeypairs({ path: config.keystore.path, unlocker: new PlaintextUnlocker() });
+        const keypairs = await loadKeypairs({ path: config.keystore.path });
         keypairs.forEach((kp, i) => {
           console.log(`[${i}] ${kp.toSuiAddress()}`);
         });

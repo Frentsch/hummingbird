@@ -8,7 +8,6 @@ import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
 import { Secp256r1Keypair } from '@mysten/sui/keypairs/secp256r1';
 import type { Keypair } from '@mysten/sui/cryptography';
 import { KeystoreError } from '../errors.js';
-import { type Unlocker, PlaintextUnlocker } from './unlocker.js';
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), '.sui', 'sui_config', 'sui.keystore');
 
@@ -64,16 +63,11 @@ function parseEntry(bytes: Uint8Array): Keypair {
 
 /**
  * Load all keypairs from a Sui keystore file.
- *
- * Async + Unlocker by design: see ./unlocker.ts. With the default
- * PlaintextUnlocker this simply parses the file as-is. Encrypted support
- * later is a new Unlocker impl — this function's signature does not change.
  */
 export async function loadKeypairs(
-  options: { path?: string; unlocker?: Unlocker } = {},
+  options: { path?: string } = {},
 ): Promise<Keypair[]> {
   const path = options.path ?? DEFAULT_KEYSTORE_PATH;
-  const unlocker = options.unlocker ?? new PlaintextUnlocker();
 
   let contents: string;
   try {
@@ -94,8 +88,7 @@ export async function loadKeypairs(
   return Promise.all(
     entries.map(async (b64) => {
       const raw = fromBase64(b64);
-      const unlocked = await unlocker.unlock(raw);
-      return parseEntry(unlocked);
+      return parseEntry(raw);
     }),
   );
 }

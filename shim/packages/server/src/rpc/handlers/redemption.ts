@@ -1,7 +1,7 @@
-import { ConnectError, type ServiceImpl } from '@connectrpc/connect';
+import { Code, ConnectError, type ServiceImpl } from '@connectrpc/connect';
 import type { RedemptionService as IRedemptionService } from '../gen/hummingbird/v1/redemption_connect.js';
 import { RedeemAssetFromASRequest } from '../gen/hummingbird/v1/redemption_pb.js';
-import { buildDeliverReservation, executeTransaction } from '@sui-shim/core';
+import { buildDeliverReservation, executeTransaction, sealToPublicKey } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { BigIntToUID } from '../helpers.js';
 
@@ -39,22 +39,31 @@ export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImp
           if(!_msg.resInfo) throw new ConnectError("Must Provide reservation Information (resId, bwRounded, bwDataplaneEncoding)");
           const redeemRequestId = state.pendingRedemptions.get(BigInt(_msg.requestId))!;
           console.log(redeemRequestId);
-
-          // AS acknowledges each request with matching request_id and authentication key. Send delivery transaction on-chain
-          const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId, encryptedReservation: new TextEncoder().encode( _msg.ak), resId: _msg.resInfo!.resId, bwRounded: _msg.resInfo!.bwRounded, bwDataplaneEncoding: _msg.resInfo!.bwDataplaneEncoding});
+          const publicKey = state.pendingRedemptionKeys.get(BigInt(_msg.requestId));
+          if (!publicKey) { 
+            //This should in theory not happen since each response is triggered by a request, but in practice an AS could crash and resend a reservation.
+            console.error(`No public key on file for request ${_msg.requestId}`);
+            state.pendingRedemptions.delete(BigInt(_msg.requestId));
+            state.pendingRedemptionKeys.delete(BigInt(_msg.requestId));
+            continue;
+          }
+          const encryptedReservation = await sealToPublicKey(publicKey, new TextEncoder().encode(_msg.ak));
+          
+          const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId, encryptedReservation, resId: _msg.resInfo!.resId, bwRounded: _msg.resInfo!.bwRounded, bwDataplaneEncoding: _msg.resInfo!.bwDataplaneEncoding});
           const result = await executeTransaction(
                   state.client as Parameters<typeof executeTransaction>[0],
                   state.signer,
                   tx,
           );
           console.log(result);
+          state.pendingRedemptions.delete(BigInt(_msg.requestId));
+          state.pendingRedemptionKeys.delete(BigInt(_msg.requestId));
         }
       })();
 
       // Send queued requests as they arrive
       while (!_ctx.signal.aborted) {
         if (sessionQueue.length === 0) {
-          console.log("send redeem request to AS")
           await new Promise<void>((resolve, reject) => {
             resolver = resolve;
             _ctx.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });

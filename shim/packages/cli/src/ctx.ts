@@ -2,7 +2,6 @@ import {
   createSuiClient,
   loadKeypairs,
   resolveSigner,
-  PlaintextUnlocker,
   executeTransaction,
   loadConfig,
 } from '@sui-shim/core';
@@ -20,7 +19,7 @@ export interface CliCtx {
 export async function makeCtx(configPath: string): Promise<CliCtx> {
   const config = await loadConfig(configPath);
   const client = createSuiClient(config.network.name);
-  const keypairs = await loadKeypairs({ path: config.keystore.path, unlocker: new PlaintextUnlocker() });
+  const keypairs = await loadKeypairs({ path: config.keystore.path });
   const signer = resolveSigner(keypairs, config.keystore.address);
   return { client, signer, config, keypairs};
 }
