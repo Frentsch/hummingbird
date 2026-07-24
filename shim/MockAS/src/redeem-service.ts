@@ -7,7 +7,29 @@ import {
   ReservationInfo,
 } from './gen/hummingbird/v1/redemption_pb.js';
 
+const MAX_BACKOFF_MS = 60_000;
+
+// Runs the redeem service, reconnecting with exponential backoff (0s, 1s, 2s, 4s, ...,
+// capped at 1min) whenever the RPC stream disconnects. A connection that stays up longer
+// than the cap is considered stable and resets the backoff back to 0.
 export async function startRedeemService(grpcPort: number): Promise<void> {
+  let backoffMs = 0;
+  while (true) {
+    const connectedAt = Date.now();
+    try {
+      await connectRedeemService(grpcPort);
+    } catch (err) {
+      console.error('[RedeemService] connection error:', err);
+    }
+    backoffMs = Date.now() - connectedAt > MAX_BACKOFF_MS ? 0 : Math.min(backoffMs === 0 ? 1000 : backoffMs * 2, MAX_BACKOFF_MS);
+    console.log(`[RedeemService] disconnected, reconnecting in ${backoffMs}ms`);
+    if (backoffMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+  }
+}
+
+async function connectRedeemService(grpcPort: number): Promise<void> {
   const transport = createGrpcTransport({
     baseUrl: `http://localhost:${grpcPort}`,
     httpVersion: '2',
