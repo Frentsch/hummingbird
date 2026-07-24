@@ -15,10 +15,11 @@ import {
   SplitAssetResponse,
   CombineAssetResponse,
   Reservation,
+  PricingStrategy,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
 import { Transaction } from '@mysten/sui/transactions';
-import { deriveObjectID } from '@mysten/sui/utils';
+import { deriveObjectID, SUI_DECIMALS } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import { SimulationError } from '@mysten/sui/client';
 import {
@@ -90,7 +91,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         apiMajorVersion: API_MAJOR_VERSION,
         apiMinorVersion: API_MINOR_VERSION,
         currency: DEFAULT_COIN_TYPE,
+        currencyExponent: SUI_DECIMALS,
         maxStatisticsGranularity: 1,
+        pricingStrategy: PricingStrategy.static_pricing,
+        transactionFeeAbsolute: 0n,
+        transactionFeeRelative: 0,
+        splitCombineFeeAbsolute: 0n,
+        supportsRedemptionDelegation: false,
+        delegationHourlyFee: 0n,
       });
     },
 
@@ -115,6 +123,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
       if (interfaceResult instanceof Error) {
         try{
+          console.log(`generating new interface for ${ifId}`);
           await executeTransaction(state.client, state.signer,
             buildCreateInterface({
               packageId: state.config.package.id,
@@ -140,6 +149,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         type: sellerAuthTokenType,
       });
       if (sellerTokens.length === 0) {
+        console.log("registering new seller");
         const sellerResult = await executeTransaction(state.client, state.signer,
           buildRegisterSeller({
             packageId: state.config.package.id,
@@ -164,6 +174,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       //const interfaceFields = getObjectFields(interfaceObj);
       //const interfaceId = interfaceFields.interface_id as number;
 
+      //TODO if a new interface obejct is created, there's a chance this throws object not found. We might need to wait a short interval before executing
       const tx = buildCreateListing({
         packageId: state.packageId,
         interfaceObjectId,
