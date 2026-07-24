@@ -16,7 +16,7 @@ import {
 import type { RedeemEvent } from '@sui-shim/core';
 import type { AppState } from './state.js';
 import { createRpcRoutes } from './rpc/handler.js';
-import { pendingRedeemRequests } from './rpc/handlers/redemption.js';
+import { pushRedeemRequest } from './rpc/handlers/redemption.js';
 import { RedeemAssetFromASRequest } from './rpc/gen/hummingbird/v1/redemption_pb.js';
 import { authInterceptor } from './rpc/auth-interceptor.js';
 import { Timestamp } from '@bufbuild/protobuf';
@@ -47,7 +47,6 @@ export async function startServer(configPath: string): Promise<void> {
     interfaceObjects: new Map(),
     deliveryListener,
     pendingRedemptions: new Map(),
-    pendingRedemptionKeys: new Map(),
     db,
     authServerUrl: config.authServer?.url,
   };
@@ -63,11 +62,13 @@ export async function startServer(configPath: string): Promise<void> {
       stopsAt: new Timestamp({ seconds: ev.expTime }),
       requestId: ev.requestId.toString(),
     });
-    state.pendingRedemptions.set(ev.requestId, ev.requestObjectId);
-    state.pendingRedemptionKeys.set(ev.requestId, ev.publicKey);
-    // Only one AS is ever connected at a time, so there's at most one entry.
-    const enqueue = pendingRedeemRequests.values().next().value;
-    enqueue?.(req);
+    state.pendingRedemptions.set(ev.requestId, {
+      requestObjectId: ev.requestObjectId,
+      publicKey: ev.publicKey,
+      req,
+      lastSentAt: Date.now(),
+    });
+    pushRedeemRequest(req);
   };
 
   const eventListener = new EventListener(client, grpcClient, config.package.id, myAddress, onRedeem);

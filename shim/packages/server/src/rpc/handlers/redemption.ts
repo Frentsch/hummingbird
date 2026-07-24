@@ -1,17 +1,27 @@
-import { Code, ConnectError, type ServiceImpl } from '@connectrpc/connect';
+import { ConnectError, type ServiceImpl } from '@connectrpc/connect';
 import type { RedemptionService as IRedemptionService } from '../gen/hummingbird/v1/redemption_connect.js';
 import { RedeemAssetFromASRequest } from '../gen/hummingbird/v1/redemption_pb.js';
 import { buildDeliverReservation, executeTransaction, sealToPublicKey } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
-import { BigIntToUID } from '../helpers.js';
 
 // The RedemptionService.RedeemASAsset bidi stream:
 //   client sends RedeemAssetFromASResponse (reservation answers from the AS)
 //   server sends RedeemAssetFromASRequest (redemption requests pushed from chain events)
 //
-// In practice the server-side push comes from the event listener. The pending request
-// queue is a module-level Map so the event listener can enqueue work.
-export const pendingRedeemRequests = new Map<bigint, (req: RedeemAssetFromASRequest) => void>();
+// In practice the server-side push comes from the event listener, which calls
+// pushRedeemRequest. Only one AS is ever connected at a time, so a single slot
+// (rather than a keyed map) is enough to track the active session's push function.
+let activeSession: ((req: RedeemAssetFromASRequest) => void) | null = null;
+
+export function pushRedeemRequest(req: RedeemAssetFromASRequest): void {
+  activeSession?.(req);
+}
+
+// How often the send loop wakes up (even without new work) to check for requests
+// that have been outstanding too long and need a resend.
+const RESEND_CHECK_INTERVAL_MS = 10_000;
+// Resend a request once it's been outstanding this long without a matching response.
+const RESEND_TIMEOUT_MS = 30_000;
 
 export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImpl<typeof IRedemptionService>> {
   return { async *redeemASAsset(stream, _ctx) {
@@ -24,32 +34,30 @@ export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImp
       resolver?.();
       resolver = null;
     };
-    const sessionId = BigInt(Date.now());
-    pendingRedeemRequests.set(sessionId, enqueue);
+    activeSession = enqueue;
+
+    // Flush anything still outstanding immediately, rather than waiting for the
+    // send loop's next periodic wake-up — covers the AS reconnecting after a drop.
+    for (const pending of state.pendingRedemptions.values()) {
+      enqueue(pending.req);
+      pending.lastSentAt = Date.now();
+    }
 
     try {
       // Drive both directions concurrently via async iteration
       const incoming = (async () => {
         for await (const _msg of stream) {
-          console.log("redemption key received from AS");
-          if(!_msg.ak || !_msg.requestId) continue;
-          console.log(_msg);
-          if(!state.pendingRedemptions.has(BigInt(_msg.requestId))) continue;
+          //console.log("redemption key received from AS");
+          if(!_msg.ak || !_msg.requestId) continue; // only the initiating response should be empty and ignored
+          //console.log(_msg);
+          const pending = state.pendingRedemptions.get(BigInt(_msg.requestId));
+          if(!pending) continue;
           console.log("matches pending redemption");
           if(!_msg.resInfo) throw new ConnectError("Must Provide reservation Information (resId, bwRounded, bwDataplaneEncoding)");
-          const redeemRequestId = state.pendingRedemptions.get(BigInt(_msg.requestId))!;
-          console.log(redeemRequestId);
-          const publicKey = state.pendingRedemptionKeys.get(BigInt(_msg.requestId));
-          if (!publicKey) { 
-            //This should in theory not happen since each response is triggered by a request, but in practice an AS could crash and resend a reservation.
-            console.error(`No public key on file for request ${_msg.requestId}`);
-            state.pendingRedemptions.delete(BigInt(_msg.requestId));
-            state.pendingRedemptionKeys.delete(BigInt(_msg.requestId));
-            continue;
-          }
-          const encryptedReservation = await sealToPublicKey(publicKey, new TextEncoder().encode(_msg.ak));
-          
-          const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId, encryptedReservation, resId: _msg.resInfo!.resId, bwRounded: _msg.resInfo!.bwRounded, bwDataplaneEncoding: _msg.resInfo!.bwDataplaneEncoding});
+          console.log(pending.requestObjectId);
+          const encryptedReservation = await sealToPublicKey(pending.publicKey, new TextEncoder().encode(_msg.ak));
+
+          const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId: pending.requestObjectId, encryptedReservation, resId: _msg.resInfo!.resId, bwRounded: _msg.resInfo!.bwRounded, bwDataplaneEncoding: _msg.resInfo!.bwDataplaneEncoding});
           const result = await executeTransaction(
                   state.client as Parameters<typeof executeTransaction>[0],
                   state.signer,
@@ -57,25 +65,38 @@ export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImp
           );
           console.log(result);
           state.pendingRedemptions.delete(BigInt(_msg.requestId));
-          state.pendingRedemptionKeys.delete(BigInt(_msg.requestId));
         }
       })();
 
-      // Send queued requests as they arrive
+      // Send queued requests as they arrive, waking periodically even when idle to
+      // resend anything that's been outstanding too long (dropped request/response,
+      // or the AS connection having been down when it was first sent).
       while (!_ctx.signal.aborted) {
         if (sessionQueue.length === 0) {
           await new Promise<void>((resolve, reject) => {
-            resolver = resolve;
-            _ctx.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+            const onAbort = () => { clearTimeout(timer); reject(new Error('aborted')); };
+            const timer = setTimeout(() => { _ctx.signal.removeEventListener('abort', onAbort); resolve(); }, RESEND_CHECK_INTERVAL_MS);
+            resolver = () => { clearTimeout(timer); _ctx.signal.removeEventListener('abort', onAbort); resolve(); };
+            _ctx.signal.addEventListener('abort', onAbort, { once: true });
           }).catch(() => null);
         }
+
+        const now = Date.now();
+        for (const pending of state.pendingRedemptions.values()) {
+          if (now - pending.lastSentAt < RESEND_TIMEOUT_MS) continue;
+          console.log(`Resending redemption request ${pending.req.requestId}`);
+          sessionQueue.push(pending.req);
+          pending.lastSentAt = now;
+        }
+
         const req = sessionQueue.shift();
         if (req) yield req;
       }
 
       await incoming;
     } finally {
-      pendingRedeemRequests.delete(sessionId);
+      // Don't clobber a newer session that may have already taken over this slot.
+      if (activeSession === enqueue) activeSession = null;
     }
   },
 }

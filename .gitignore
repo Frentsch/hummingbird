@@ -78,3 +78,6 @@ contracts/build/hummingbird/bytecode_modules
 contracts/build/hummingbird/debug_info
 contracts/build/hummingbird/sources/dependencies
 contracts/build
+
+# keys
+shim/auth-keypair.json
