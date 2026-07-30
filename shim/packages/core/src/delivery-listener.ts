@@ -21,8 +21,8 @@ const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   redeem_request_id: bcs.Address,
   public_key: bcs.vector(bcs.u8()),
   encrypted_reservation: bcs.vector(bcs.u8()),
-  res_id: bcs.u32(),
-  bw_rounded: bcs.u32(),
+  res_id: bcs.u64(),
+  bw_rounded: bcs.u64(),
   bw_dataplane_encoding: bcs.u16(),
 });
 
@@ -40,12 +40,12 @@ export class DeliveryListener {
    * Rejects with DeliveryTimeoutError on timeout.
    */
   async waitForDelivery(
-    redeemRequestObjectId: string,
+    publicKey: Uint8Array,
     packageId: string,
     timeoutMs: number,
   ): Promise<DeliveryResult> {
     const deliveryEventType = `${packageId}::hummingbird_asset::ReservationDelivered`;
-    const normalizedId = redeemRequestObjectId.toLowerCase();
+    //const normalizedId = redeemRequestObjectId.toLowerCase();
 
     return new Promise<DeliveryResult>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -62,13 +62,14 @@ export class DeliveryListener {
           for await (const response of stream.responses) {
             const checkpoint = response.checkpoint;
             if (!checkpoint) continue;
-
             for (const tx of checkpoint.transactions) {
               for (const event of tx.events?.events ?? []) {
+              //console.log(event.eventType);
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;
-                
-                let decoded: { redeem_request_id: string; encrypted_reservation: number[]; res_id: number, bw_rounded: number; bw_dataplane_encoding: number };
+                console.log("received delivery")
+
+                let decoded: { redeem_request_id: string; encrypted_reservation: number[]; public_key: number[]; res_id: string, bw_rounded: string; bw_dataplane_encoding: number };
                 try {
                   const fullDecode = ReservationDeliveredBCS.parse(event.contents.value);
                   console.log(fullDecode);
@@ -79,10 +80,14 @@ export class DeliveryListener {
                 }
                 console.log(decoded);
                 
-                if (decoded.redeem_request_id.toLowerCase() !== normalizedId) continue;
+                //TODO add some additional identifier to avoid two concurrent redemptions to get mismatched
+                if (!(publicKey.length == decoded.public_key.length && publicKey.every((value,index) => value === decoded.public_key[index]))){
+                  console.log(`mismatched publickey ${decoded.public_key} and ${publicKey}`)
+                  continue;
+                } 
 
                 clearTimeout(timer);
-                resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation), resId: decoded.res_id, bwRounded: decoded.bw_rounded, bwDataplaneEncoding: decoded.bw_dataplane_encoding });
+                resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation), resId: Number(decoded.res_id), bwRounded: Number(decoded.bw_rounded), bwDataplaneEncoding: decoded.bw_dataplane_encoding });
                 return;
               }
             }

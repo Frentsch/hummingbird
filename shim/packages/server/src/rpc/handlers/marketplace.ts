@@ -369,6 +369,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         // the returned cost must fit an unsigned integer, but in some cases the storage rebate is higher than the transaction cost leading to a gain (negative cost). 
         // In practice this should never happpen assuming assets prices are set properly, but when testing with small values this might happen 
         cost = cost<0n?0n:cost; 
+        //TODO buying a fraction of the asset changes the asset it to no longer match the originally wrapped id. This leads to errors
         const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
         return new BuyAssetsResponse({ assets: bought, cost});
       } catch (error) {
@@ -387,6 +388,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async redeemAsset(req, _ctx) {
+      
+      try{
       var tx: Transaction;
       //TODO generate and store the private/public key pair somewhere
       const publicKey = state.authKeypair.publicKey;
@@ -404,6 +407,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         reservation.stopsAt     = pairAsset.expTime;
         reservation.ingressId = pairAsset.ifIngressId;
         reservation.egressId = pairAsset.ifEgressId;
+        reservation.bandwidth = pairAsset.bandwidth;
         tx  = buildRedeemPair({packageId: state.packageId, interfacePairId: interfacePairAssetId, publicKey});
 
       }else{
@@ -432,24 +436,32 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
           reservation.ingressId = ingressIfId;
           reservation.egressId = egressIfId;
+          reservation.bandwidth = ingressAsset.bandwidth<egressAsset.bandwidth?ingressAsset.bandwidth:egressAsset.bandwidth;
       }
-      try{
-          const result = await executeTransaction(state.client, state.signer, tx);
-
-          const redeemRequestObjectId = extractCreatedObjectId(
-            result,
-            getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
-          );
-
-          const delivery = await state.deliveryListener.waitForDelivery(
-            redeemRequestObjectId,
+        
+          console.log(`waiting for redemption of ${publicKey}`);
+          const deliveryPromise = state.deliveryListener.waitForDelivery(
+            publicKey,
             state.packageId,
             state.config.redemption.timeoutSecs * 1000,
           );
+
+          console.log(`executing redemption`)
+          const result = await executeTransaction(state.client, state.signer, tx);
+          /*
+          const redeemRequestObjectId = extractCreatedObjectId(
+            result,
+            getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
+          );*/
+          
+
+          
+          const delivery = await deliveryPromise;
+          
+          console.log(`received delivery${delivery.resId}`);
           const authKey = await openSealed(state.authKeypair,delivery.encryptedReservation);
           const authenticationKey = new TextDecoder().decode(authKey);
           console.log(authenticationKey);
-          console.log(delivery.resId);
           reservation.resId = delivery.resId;
           reservation.bw = delivery.bwRounded;
           reservation.ak = authenticationKey;
