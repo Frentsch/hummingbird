@@ -407,7 +407,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         reservation.stopsAt     = pairAsset.expTime;
         reservation.ingressId = pairAsset.ifIngressId;
         reservation.egressId = pairAsset.ifEgressId;
-        reservation.bandwidth = pairAsset.bandwidth;
         tx  = buildRedeemPair({packageId: state.packageId, interfacePairId: interfacePairAssetId, publicKey});
 
       }else{
@@ -431,12 +430,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           console.log(ingressObj);
           console.log(egressObj);
           if(!(ingressIfId&&egressIfId)) throw new ConnectError("Asset Mismatch. Ingress asset must have ingress id set. Egress asset must have egress id set", Code.FailedPrecondition);
-          const publicKey = new Uint8Array(32);
-
+          
           tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
           reservation.ingressId = ingressIfId;
           reservation.egressId = egressIfId;
-          reservation.bandwidth = ingressAsset.bandwidth<egressAsset.bandwidth?ingressAsset.bandwidth:egressAsset.bandwidth;
       }
         
           console.log(`waiting for redemption of ${publicKey}`);
@@ -465,16 +462,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           reservation.resId = delivery.resId;
           reservation.bw = delivery.bwRounded;
           reservation.ak = authenticationKey;
-          /*insertReservation(state.db, {
-            resId:     delivery.resId,
-            ia,
-            ingressId: ingressIfId,
-            egressId:  egressIfId,
-            bw:        delivery.bwRounded,
-            startsAt,
-            stopsAt,
-            ak:        authenticationKey,
-          });*/
           insertReservation(state.db, reservation as ReservationRow);
 
           return new RedeemAssetResponse({

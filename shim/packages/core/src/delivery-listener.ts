@@ -46,16 +46,19 @@ export class DeliveryListener {
   ): Promise<DeliveryResult> {
     const deliveryEventType = `${packageId}::hummingbird_asset::ReservationDelivered`;
     //const normalizedId = redeemRequestObjectId.toLowerCase();
+    const abortController = new AbortController();
 
     return new Promise<DeliveryResult>((resolve, reject) => {
       const timer = setTimeout(() => {
+        abortController.abort();
         reject(new DeliveryTimeoutError());
       }, timeoutMs);
 
-      const stream = this.#grpc.subscriptionService.subscribeCheckpoints({
+      const stream = this.#grpc.subscriptionService.subscribeCheckpoints(
         // Include both events and effects so we can check object deletions
-        readMask: { paths: ['transactions.events', 'transactions.effects'] },
-      });
+        { readMask: { paths: ['transactions.events', 'transactions.effects'] } },
+        { abort: abortController.signal },
+      );
 
       (async () => {
         try {
@@ -87,6 +90,7 @@ export class DeliveryListener {
                 } 
 
                 clearTimeout(timer);
+                abortController.abort();
                 resolve({ encryptedReservation: new Uint8Array(decoded.encrypted_reservation), resId: Number(decoded.res_id), bwRounded: Number(decoded.bw_rounded), bwDataplaneEncoding: decoded.bw_dataplane_encoding });
                 return;
               }
@@ -96,6 +100,7 @@ export class DeliveryListener {
           reject(new Error('gRPC stream ended before ReservationDelivered'));
         } catch (err) {
           clearTimeout(timer);
+          abortController.abort();
           reject(err);
         }
       })();
