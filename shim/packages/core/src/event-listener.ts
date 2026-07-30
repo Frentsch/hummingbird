@@ -100,7 +100,7 @@ export class EventListener {
         const json = node.contents?.json ?? {};
         if ((json.issuer ?? '').toLowerCase() !== this.#myAddress) continue;
         if (!json.redeem_request_id) continue;
-        await this.#processRequest(
+        this.#processRequest(
           node.transaction?.digest ?? '',
           String(node.sequenceNumber),
           json.redeem_request_id as string,
@@ -148,7 +148,8 @@ export class EventListener {
           const txDigest = tx.digest ?? '';
           const eventSeq = String(i);
           try {
-            await this.#processRequest(txDigest, eventSeq, decoded.redeem_request_id);
+            //TODO check if this await is needed, because it blocks further requests which slows down everything
+            this.#processRequest(txDigest, eventSeq, decoded.redeem_request_id);
           } catch (err) {
             console.error(`[EventListener] Failed to process event in tx ${txDigest}:`, err);
           }
