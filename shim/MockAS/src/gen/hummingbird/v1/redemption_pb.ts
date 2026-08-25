@@ -21,6 +21,114 @@ import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialM
 import { Message, proto3, protoInt64, Timestamp } from "@bufbuild/protobuf";
 
 /**
+ * @generated from message proto.hummingbird.v1.DelegateRedemptionRequest
+ */
+export class DelegateRedemptionRequest extends Message<DelegateRedemptionRequest> {
+  /**
+   * delegate request valid from now until expiration_time
+   *
+   * @generated from field: google.protobuf.Timestamp expiration_time = 1;
+   */
+  expirationTime?: Timestamp;
+
+  /**
+   * the start of the reservation ID interval
+   *
+   * @generated from field: uint32 reservation_id_lower_bound = 2;
+   */
+  reservationIdLowerBound = 0;
+
+  /**
+   * the exclusive end of the reservation ID interval
+   *
+   * @generated from field: uint32 reservation_id_upper_bound = 3;
+   */
+  reservationIdUpperBound = 0;
+
+  /**
+   * the key used for the derivation of the authentication keys
+   *
+   * @generated from field: bytes Key = 4;
+   */
+  Key = new Uint8Array(0);
+
+  /**
+   * up to 1024 sorted values that indicate the dataplane encoding points
+   *
+   * @generated from field: repeated uint32 encoding_points = 5;
+   */
+  encodingPoints: number[] = [];
+
+  constructor(data?: PartialMessage<DelegateRedemptionRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.DelegateRedemptionRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "expiration_time", kind: "message", T: Timestamp },
+    { no: 2, name: "reservation_id_lower_bound", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 3, name: "reservation_id_upper_bound", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "Key", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 5, name: "encoding_points", kind: "scalar", T: 13 /* ScalarType.UINT32 */, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DelegateRedemptionRequest {
+    return new DelegateRedemptionRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DelegateRedemptionRequest {
+    return new DelegateRedemptionRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DelegateRedemptionRequest {
+    return new DelegateRedemptionRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: DelegateRedemptionRequest | PlainMessage<DelegateRedemptionRequest> | undefined, b: DelegateRedemptionRequest | PlainMessage<DelegateRedemptionRequest> | undefined): boolean {
+    return proto3.util.equals(DelegateRedemptionRequest, a, b);
+  }
+}
+
+/**
+ * @generated from message proto.hummingbird.v1.DelegateRedemptionResponse
+ */
+export class DelegateRedemptionResponse extends Message<DelegateRedemptionResponse> {
+  /**
+   * @generated from field: google.protobuf.Timestamp expiration_time = 1;
+   */
+  expirationTime?: Timestamp;
+
+  constructor(data?: PartialMessage<DelegateRedemptionResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.DelegateRedemptionResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "expiration_time", kind: "message", T: Timestamp },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DelegateRedemptionResponse {
+    return new DelegateRedemptionResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DelegateRedemptionResponse {
+    return new DelegateRedemptionResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DelegateRedemptionResponse {
+    return new DelegateRedemptionResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: DelegateRedemptionResponse | PlainMessage<DelegateRedemptionResponse> | undefined, b: DelegateRedemptionResponse | PlainMessage<DelegateRedemptionResponse> | undefined): boolean {
+    return proto3.util.equals(DelegateRedemptionResponse, a, b);
+  }
+}
+
+/**
  * @generated from message proto.hummingbird.v1.RedeemAssetFromASRequest
  */
 export class RedeemAssetFromASRequest extends Message<RedeemAssetFromASRequest> {
@@ -35,9 +143,9 @@ export class RedeemAssetFromASRequest extends Message<RedeemAssetFromASRequest> 
   egressId = 0;
 
   /**
-   * @generated from field: uint64 bw = 3;
+   * @generated from field: uint32 bandwidth = 3;
    */
-  bw = protoInt64.zero;
+  bandwidth = 0;
 
   /**
    * @generated from field: google.protobuf.Timestamp starts_at = 4;
@@ -52,9 +160,9 @@ export class RedeemAssetFromASRequest extends Message<RedeemAssetFromASRequest> 
   /**
    * to match request with response
    *
-   * @generated from field: string request_id = 6;
+   * @generated from field: uint64 request_id = 6;
    */
-  requestId = "";
+  requestId = protoInt64.zero;
 
   constructor(data?: PartialMessage<RedeemAssetFromASRequest>) {
     super();
@@ -66,10 +174,10 @@ export class RedeemAssetFromASRequest extends Message<RedeemAssetFromASRequest> 
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "ingress_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 2, name: "egress_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 3, name: "bw", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 3, name: "bandwidth", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 4, name: "starts_at", kind: "message", T: Timestamp },
     { no: 5, name: "stops_at", kind: "message", T: Timestamp },
-    { no: 6, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "request_id", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RedeemAssetFromASRequest {
@@ -94,21 +202,28 @@ export class RedeemAssetFromASRequest extends Message<RedeemAssetFromASRequest> 
  */
 export class RedeemAssetFromASResponse extends Message<RedeemAssetFromASResponse> {
   /**
-   * @generated from field: proto.hummingbird.v1.ReservationInfo res_info = 1;
-   */
-  resInfo?: ReservationInfo;
-
-  /**
-   * @generated from field: string ak = 2;
-   */
-  ak = "";
-
-  /**
    * to match request with response
    *
-   * @generated from field: string request_id = 3;
+   * @generated from field: uint64 request_id = 1;
    */
-  requestId = "";
+  requestId = protoInt64.zero;
+
+  /**
+   * @generated from oneof proto.hummingbird.v1.RedeemAssetFromASResponse.result
+   */
+  result: {
+    /**
+     * @generated from field: proto.hummingbird.v1.ReservationInfo res_info = 2;
+     */
+    value: ReservationInfo;
+    case: "resInfo";
+  } | {
+    /**
+     * @generated from field: string error = 3;
+     */
+    value: string;
+    case: "error";
+  } | { case: undefined; value?: undefined } = { case: undefined };
 
   constructor(data?: PartialMessage<RedeemAssetFromASResponse>) {
     super();
@@ -118,9 +233,9 @@ export class RedeemAssetFromASResponse extends Message<RedeemAssetFromASResponse
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.RedeemAssetFromASResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "res_info", kind: "message", T: ReservationInfo },
-    { no: 2, name: "ak", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 3, name: "request_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "request_id", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 2, name: "res_info", kind: "message", T: ReservationInfo, oneof: "result" },
+    { no: 3, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "result" },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RedeemAssetFromASResponse {
@@ -145,19 +260,24 @@ export class RedeemAssetFromASResponse extends Message<RedeemAssetFromASResponse
  */
 export class ReservationInfo extends Message<ReservationInfo> {
   /**
-   * @generated from field: uint64 res_id = 1;
+   * @generated from field: uint32 reservation_id = 1;
    */
-  resId = protoInt64.zero;
+  reservationId = 0;
 
   /**
-   * @generated from field: uint64 bw_rounded = 2;
+   * @generated from field: uint32 bandwith_rounded = 2;
    */
-  bwRounded = protoInt64.zero;
+  bandwithRounded = 0;
 
   /**
    * @generated from field: uint32 bw_dataplane_encoding = 3;
    */
   bwDataplaneEncoding = 0;
+
+  /**
+   * @generated from field: bytes authentication_key = 4;
+   */
+  authenticationKey = new Uint8Array(0);
 
   constructor(data?: PartialMessage<ReservationInfo>) {
     super();
@@ -167,9 +287,10 @@ export class ReservationInfo extends Message<ReservationInfo> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.ReservationInfo";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "res_id", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
-    { no: 2, name: "bw_rounded", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 1, name: "reservation_id", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 2, name: "bandwith_rounded", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 3, name: "bw_dataplane_encoding", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 4, name: "authentication_key", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReservationInfo {

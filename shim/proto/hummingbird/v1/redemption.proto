@@ -22,27 +22,47 @@ import "google/protobuf/timestamp.proto";
 
 service RedemptionService {
     rpc RedeemASAsset(stream RedeemAssetFromASResponse) returns (stream RedeemAssetFromASRequest) {}
+    rpc DelegateRedemption(DelegateRedemptionRequest) returns (DelegateRedemptionResponse) {}
+}
+
+message DelegateRedemptionRequest {
+    // delegate request valid from now until expiration_time
+    google.protobuf.Timestamp expiration_time = 1;
+    // the start of the reservation ID interval
+    uint32 reservation_id_lower_bound = 2;
+    // the exclusive end of the reservation ID interval
+    uint32 reservation_id_upper_bound = 3;
+    // the key used for the derivation of the authentication keys
+    bytes Key = 4;
+    // up to 1024 sorted values that indicate the dataplane encoding points
+    repeated uint32 encoding_points = 5;
+}
+message DelegateRedemptionResponse {
+    google.protobuf.Timestamp expiration_time = 1;
 }
 
 message RedeemAssetFromASRequest {
     uint32 ingress_id = 1;
     uint32 egress_id = 2;
-    uint64 bw = 3;
+    uint32 bandwidth = 3;
     google.protobuf.Timestamp starts_at = 4;
     google.protobuf.Timestamp stops_at = 5;
     // to match request with response
-    string request_id = 6;
+    uint64 request_id = 6;
 }
 
 message RedeemAssetFromASResponse {
-    ReservationInfo res_info = 1;
-    string ak = 2;
     // to match request with response
-    string request_id = 3;
+    uint64 request_id = 1;
+    oneof result {
+        ReservationInfo res_info = 2;
+        string error = 3;
+    }
 }
 
 message ReservationInfo {
-    uint64 res_id = 1;
-    uint64 bw_rounded = 2;
-    uint32  bw_dataplane_encoding = 3;
+    uint32 reservation_id = 1;
+    uint32 bandwith_rounded = 2;
+    uint32 bw_dataplane_encoding = 3;
+    bytes authentication_key = 4;
 }

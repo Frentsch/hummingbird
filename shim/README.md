@@ -1,7 +1,3 @@
-To start the GUI: 
-```pnpm --filter @sui-shim/gui dev```
-at http://localhost:3000
-
 # 1. Start the daemon
 cd shim
 pnpm exec sui-shim daemon

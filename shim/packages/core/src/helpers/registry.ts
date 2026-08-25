@@ -8,7 +8,8 @@ import type { SuiGraphQLClient } from '../sui-client.js';
 //   - u64 values are JSON strings; u8/u16/u32 are JSON numbers
 
 export async function getAllListingsOf(interfaceId: string, client: SuiGraphQLClient): Promise<any[]> {
-    const interfaceObj = await client.getObject({ objectId: interfaceId, include: { json: true } });
+    const interfaceObj = await client.getObject({ objectId: interfaceId, include: { json: true } }).catch((_)=>{});
+    if(!interfaceObj) return [];
     const interfaceJson = interfaceObj.object.json;
     if (!interfaceJson) return [];
 
@@ -38,7 +39,8 @@ export async function getAllListingsOf(interfaceId: string, client: SuiGraphQLCl
 }
 
 export async function getAllInterfacesOf(asRegistryId: string, client: SuiGraphQLClient): Promise<string[]> {
-    const registryObj = await client.getObject({ objectId: asRegistryId, include: { json: true } });
+    const registryObj = await client.getObject({ objectId: asRegistryId, include: { json: true } }).catch((_) => {});
+    if(!registryObj) return []
     const registryJson = registryObj.object.json;
     if (!registryJson) return [];
 

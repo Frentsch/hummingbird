@@ -17,7 +17,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateChallengeRequest, CreateChallengeResponse, JWTResetRequest, JWTResetResponse, RegisterASRequest, RegisterASResponse } from "./account_pb.js";
+import { CreateChallengeRequest, CreateChallengeResponse, JWTResetRequest, JWTResetResponse, RegisterASRequest, RegisterASResponse, SetPasswordRequest, SetPasswordResponse } from "./account_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -51,6 +51,15 @@ export const AccountService = {
       name: "RegisterAS",
       I: RegisterASRequest,
       O: RegisterASResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * @generated from rpc proto.hummingbird.v1.AccountService.SetPassword
+     */
+    setPassword: {
+      name: "SetPassword",
+      I: SetPasswordRequest,
+      O: SetPasswordResponse,
       kind: MethodKind.Unary,
     },
   }

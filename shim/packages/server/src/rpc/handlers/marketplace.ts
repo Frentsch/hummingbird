@@ -16,6 +16,7 @@ import {
   CombineAssetResponse,
   Reservation,
   PricingStrategy,
+  UpdateAssetsResponse,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
 import { Transaction } from '@mysten/sui/transactions';
@@ -49,11 +50,13 @@ import {
 } from '@sui-shim/core';
 import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
-import { BigIntToUID, ListingToQueryAsset, SuiToRpcAsset } from '../helpers.js';
+import { BigIntToUID, bytesToSuiHex, ListingToQueryAsset, suiHexToBytes, SuiToRpcAsset } from '../helpers.js';
 import { assert } from 'node:console';
 import { requestHeaderWithCompression } from '@connectrpc/connect/protocol-connect';
 import { text } from 'node:stream/consumers';
 import { bigint, config } from 'zod';
+import { TextEncoder } from 'node:util';
+import { _overwrite } from 'zod/v4/core';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -83,6 +86,8 @@ function filterReservation(r: Reservation, req: FetchReservationsRequest): boole
   return true;
 }
 
+
+
 export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceImpl<typeof IMarketplaceService>> {
   return {
     info(_req, _ctx) {
@@ -100,6 +105,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         supportsRedemptionDelegation: false,
         delegationHourlyFee: 0n,
       });
+    },
+
+    async updateAssets(req, _ctx) {
+      const assetUpdates = req.assets; 
+      for(const update of assetUpdates){
+        const id = bytesToSuiHex(update.assetId)
+        console.log(id)
+      }
+      return new UpdateAssetsResponse()
     },
 
     async publishAsset(req, _ctx) {
@@ -200,7 +214,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         result,
         getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
       );
-      return new PublishAssetResponse({ assetId: BigInt(created).toString() });
+      return new PublishAssetResponse({ assetId: suiHexToBytes(created) });
     }catch(error){
       console.log(error);
       throw new ConnectError(`Failed to publish asset: ${error}`, Code.Internal);
@@ -209,6 +223,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
     async searchAssets(_req, _ctx) {
       console.log("start asset search");
+      var assets: SearchAsset[];
       if (_req.owned) {
         const result = await state.client.listOwnedObjects({
           owner: state.signer.getPublicKey().toSuiAddress(),
@@ -221,7 +236,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           .map((obj: any) => SuiToRpcAsset(obj))
           .filter((asset: SearchAsset) => filterAsset(asset, _req));
 
-        return new SearchAssetsResponse({assets: ownedAssets });
+        assets = ownedAssets;
       } else {
         function ListingsToAssets(listings: any[]) {
           return listings
@@ -229,7 +244,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             .map((obj: any) => ListingToQueryAsset(obj))
             .filter((asset: SearchAsset) => filterAsset(asset, _req));
         }
-
+        var marketListings: any[] = [];
         if (_req.ia) {
           const isdAsId = _req.ia;
           const asRegistryId = deriveObjectID(
@@ -237,8 +252,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             'u64',
             bcs.U64.serialize(BigInt(isdAsId)).toBytes(),
           );
-          console.log(`[debug] asRegistryId ${asRegistryId}`);
-
+          
           if (_req.ifIdIngress || _req.ifIdEgress) {
             console.log("Find specific Interface");
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
@@ -251,11 +265,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             );
             console.log(`Interface: ${interfaceObjId}`);
 
-            const listingObjs = await getAllListingsOf(interfaceObjId, state.client);
-            console.log(listingObjs);
-
-            const assets: SearchAsset[] = ListingsToAssets(listingObjs);
-            return new SearchAssetsResponse({ assets });
+            marketListings = await getAllListingsOf(interfaceObjId, state.client);
+            
           } else {
             try {
               const interfaceIds = await getAllInterfacesOf(asRegistryId, state.client);
@@ -265,12 +276,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
                 const ls = await getAllListingsOf(interfaceId, state.client);
                 listings.push(...ls);
               }
-              console.log(listings);
-              return new SearchAssetsResponse({ assets: ListingsToAssets(listings) });
+              marketListings = listings
             } catch (error) {
               console.log(error);
+              throw new ConnectError(`Failed to fetch all Listings: ${error}`);
             }
-            throw new ConnectError("Failed to fetch all Listings");
           }
         } else {
           const result: any[] = [];
@@ -287,26 +297,23 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           } catch (error) {
             console.log(error);
           }
-          console.log(result);
-          return new SearchAssetsResponse({ assets: ListingsToAssets(result) });
+          marketListings = result
         }
+        assets = ListingsToAssets(marketListings)
       }
+
+      const pageSize = _req.maxReturnedAssets ?? 10;
+      
+        return new SearchAssetsResponse({assets: assets.slice(_req.page * pageSize, (_req.page + 1) * pageSize)})
     },
 
     async buyAssets(req, _ctx) {
       try {
-        // Validate all assets upfront before touching the chain.
-        for (const asset of req.assets) {
-          if (asset.startsAtExactly === undefined || asset.stopsAtExactly === undefined)
-            throw new ConnectError(`must specify start and stop time for asset ${asset.assetId}`);
-          if (asset.bandwidthExact === undefined)
-            throw new ConnectError(`must specify exact bandwidth for asset ${asset.assetId}`);
-        }
 
         // Fetch all listing objects and wallet balance in parallel.
         const [listingResults, balanceResult] = await Promise.all([
           Promise.all(req.assets.map(asset => {
-            const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
+            const listingId = bytesToSuiHex(asset.assetId);
             return state.client.getObject({ objectId: listingId, include: { json: true } });
           })),
           state.client.getBalance({ owner: state.signer.toSuiAddress() }),
@@ -320,7 +327,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const fields = getObjectFields(listingResults[i]!);
           const interfaceObjectId = fields['interface'] as string;
           const assetId = (fields['asset'] as Record<string, any>)['id'] as string;
-          const listingId = '0x' + BigInt(asset.assetId).toString(16).padStart(64, '0');
+          const listingId = bytesToSuiHex(asset.assetId);
           const unitPrice = BigInt(fields['price'] as string);
           const reqStart = BigInt(asset.startsAtExactly!.seconds);
           const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
@@ -329,49 +336,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
         });
 
-        const totalPrice = metas.reduce((sum, m) => sum + m.effectivePrice, 0n);
-
-        const gasBudget = BigInt(state.config.transaction.gasBudget);
-        const spendable = BigInt(totalBalance) > gasBudget ? BigInt(totalBalance) - gasBudget : 0n;
-        const effectiveMax = req.maxPrice < spendable ? req.maxPrice : spendable;
-
-        if (effectiveMax < totalPrice)
-          throw new ConnectError(`spendable balance (${effectiveMax}) is below estimated total cost (${totalPrice})`);
-
-        const tx = new Transaction();
-        console.log(gasBudget);
-        tx.setGasBudget(gasBudget);
-        const [paymentCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(effectiveMax)]);
-
-        const slack = effectiveMax - totalPrice;
-        for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
-          const slotMax = meta.effectivePrice + (totalPrice > 0n ? slack * meta.effectivePrice / totalPrice : 0n);
-          const [slotCoin] = tx.splitCoins(paymentCoin, [tx.pure.u64(slotMax)]);
-          addBuyAndTake(tx, {
-            packageId: state.config.package.id,
-            interfaceObjectId: meta.interfaceObjectId,
-            listingId: meta.listingId,
-            startTime: BigInt(asset.startsAtExactly!.seconds),
-            expTime:   BigInt(asset.stopsAtExactly!.seconds),
-            bandwidth: BigInt(asset.bandwidthExact!),
-            coinType: DEFAULT_COIN_TYPE,
-          }, slotCoin);
-        }
-
-        tx.mergeCoins(tx.gas, [paymentCoin]);
-        
-        const result = await executeTransaction(state.client, state.signer, tx);
-        console.log(result);
-
-        // BalanceChange.address (new API) replaced old .owner.AddressOwner
-        const balanceChange = result.balanceChanges?.find(c => c.address === state.signer.toSuiAddress());
-        var cost = BigInt(-Number(balanceChange?.amount ?? 0));
-        // the returned cost must fit an unsigned integer, but in some cases the storage rebate is higher than the transaction cost leading to a gain (negative cost). 
-        // In practice this should never happpen assuming assets prices are set properly, but when testing with small values this might happen 
-        cost = cost<0n?0n:cost; 
-        //TODO buying a fraction of the asset changes the asset it to no longer match the originally wrapped id. This leads to errors
-        const bought = metas.map(m => new BoughtAsset({ assetId: BigInt(m.assetId).toString() }));
-        return new BuyAssetsResponse({ assets: bought, cost});
       } catch (error) {
         console.log(error);
         if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
@@ -385,6 +349,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           }
         throw error;
       }
+
+      return new BuyAssetsResponse({assets: req.assets, cost:req.maxPrice})
     },
 
     async redeemAsset(req, _ctx) {
@@ -399,7 +365,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         console.log(interfacePairId);
         if(!interfacePairId) throw new ConnectError("Must specify if_pair_asset_id", Code.InvalidArgument);
         //TODO add a conversion helper function
-        const interfacePairAssetId = '0x' + BigInt(interfacePairId).toString(16).padStart(64,'0');
+        const interfacePairAssetId = bytesToSuiHex(interfacePairId);
         const asset = await state.client.getObject({objectId: interfacePairAssetId, include: {json: true}});
         const pairAsset = getHummingbirdAsset(asset);
         reservation.ia = pairAsset.isdAsId;
@@ -413,8 +379,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         const ingressAssetId = req.interfaces.value!.ingressAssetId;
         const egressAssetId = req.interfaces.value!.egressAssetId;
         if(!(ingressAssetId && egressAssetId)) throw new ConnectError("Must specify ingress and egress Id, or interface pair id", Code.FailedPrecondition);    
-        const ingressId = '0x' + BigInt(ingressAssetId).toString(16).padStart(64, '0');
-        const egressId = '0x' + BigInt(egressAssetId).toString(16).padStart(64, '0');
+        const ingressId = bytesToSuiHex(ingressAssetId);
+        const egressId = bytesToSuiHex(egressAssetId);
         console.log(ingressId);
         console.log(egressId);
           const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
@@ -507,6 +473,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async splitAsset(req, _ctx) {
+      //TODO allow for repeated splits
       if (req.splitOption.case === undefined) {
         throw new ConnectError('splitOption is required', Code.InvalidArgument);
       }
@@ -515,15 +482,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const tx = new Transaction();
       tx.setGasBudget(gasBudget);
 
-      const assetId = '0x' + BigInt(req.assetId).toString(16).padStart(64, '0');
+      const assetId = bytesToSuiHex(req.assetId);
       const newAsset = req.splitOption.case === 'timeSplit'
         ? tx.moveCall({
             target: `${state.config.package.id}::hummingbird_asset::split_time`,
-            arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.seconds))],
+            arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.splits[0]?.seconds??0))],
           })
         : tx.moveCall({
             target: `${state.config.package.id}::hummingbird_asset::split_bandwidth`,
-            arguments: [tx.object(assetId), tx.pure.u64(req.splitOption.value)],
+            arguments: [tx.object(assetId), tx.pure.u64(req.splitOption.value.splits[0]??0)],
           });
 
       tx.transferObjects([newAsset], tx.pure.address(state.signer.toSuiAddress()));
@@ -531,12 +498,16 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       const result = await executeTransaction(state.client, state.signer, tx);
       const newAssetId = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
 
-      return new SplitAssetResponse({ assetId1: req.assetId, assetId2: BigInt(newAssetId).toString() });
+      //TODO return correct new ids
+      return new SplitAssetResponse({ assetIds: [req.assetId, suiHexToBytes(newAssetId)] });
     },
 
     async combineAssets(req, _ctx) {
-      const assetId1 = '0x' + BigInt(req.assetId1).toString(16).padStart(64, '0');
-      const assetId2 = '0x' + BigInt(req.assetId2).toString(16).padStart(64, '0');
+      if (req.assetIds.length <= 2) {
+        throw new ConnectError("must specify at least 2 assets to combine")
+      }
+      const assetId1 = bytesToSuiHex(req.assetIds[0]!);
+      const assetId2 = bytesToSuiHex(req.assetIds[1]!);
 
       const [obj1, obj2] = await Promise.all([
         state.client.getObject({ objectId: assetId1, include: { json: true } }),
@@ -558,7 +529,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
       await executeTransaction(state.client, state.signer, tx);
 
-      return new CombineAssetResponse({ assetId: req.assetId1 });
+      return new CombineAssetResponse({ assetId: Uint8Array.from(req.assetIds) });
     },
   };
 }

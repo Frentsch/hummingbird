@@ -24,6 +24,14 @@ service AccountService {
     rpc ResetJWT(JWTResetRequest) returns (JWTResetResponse) {}
     rpc CreateChallenge(CreateChallengeRequest) returns (CreateChallengeResponse) {}
     rpc RegisterAS(RegisterASRequest) returns (RegisterASResponse) {}
+    rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse) {}
+}
+
+message SetPasswordRequest {
+    string password = 1;
+}
+message SetPasswordResponse {
+
 }
 
 message RegisterASRequest {

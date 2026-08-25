@@ -82,9 +82,9 @@ export class UpdateAssetsRequest extends Message<UpdateAssetsRequest> {
  */
 export class AssetUpdate extends Message<AssetUpdate> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   /**
    * @generated from oneof proto.hummingbird.v1.AssetUpdate.operation
@@ -111,7 +111,7 @@ export class AssetUpdate extends Message<AssetUpdate> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.AssetUpdate";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "update", kind: "message", T: PublisherAsset, oneof: "operation" },
     { no: 3, name: "remove", kind: "message", T: Remove, oneof: "operation" },
   ]);
@@ -210,9 +210,9 @@ export class UpdateAssetResult extends Message<UpdateAssetResult> {
    */
   resultType: {
     /**
-     * @generated from field: string new_id = 1;
+     * @generated from field: bytes new_id = 1;
      */
-    value: string;
+    value: Uint8Array;
     case: "newId";
   } | {
     /**
@@ -230,7 +230,7 @@ export class UpdateAssetResult extends Message<UpdateAssetResult> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.UpdateAssetResult";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "new_id", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "result_type" },
+    { no: 1, name: "new_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "result_type" },
     { no: 2, name: "error", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "result_type" },
   ]);
 
@@ -399,24 +399,24 @@ export class StatisticsResponseEntry extends Message<StatisticsResponseEntry> {
  */
 export class SplitAssetRequest extends Message<SplitAssetRequest> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   /**
    * @generated from oneof proto.hummingbird.v1.SplitAssetRequest.split_option
    */
   splitOption: {
     /**
-     * @generated from field: uint32 bw_split = 2;
+     * @generated from field: proto.hummingbird.v1.SplitBwOption bw_split = 2;
      */
-    value: number;
+    value: SplitBwOption;
     case: "bwSplit";
   } | {
     /**
-     * @generated from field: google.protobuf.Timestamp time_split = 3;
+     * @generated from field: proto.hummingbird.v1.SplitTimeOption time_split = 3;
      */
-    value: Timestamp;
+    value: SplitTimeOption;
     case: "timeSplit";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
@@ -428,9 +428,9 @@ export class SplitAssetRequest extends Message<SplitAssetRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.SplitAssetRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "bw_split", kind: "scalar", T: 13 /* ScalarType.UINT32 */, oneof: "split_option" },
-    { no: 3, name: "time_split", kind: "message", T: Timestamp, oneof: "split_option" },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "bw_split", kind: "message", T: SplitBwOption, oneof: "split_option" },
+    { no: 3, name: "time_split", kind: "message", T: SplitTimeOption, oneof: "split_option" },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SplitAssetRequest {
@@ -451,20 +451,89 @@ export class SplitAssetRequest extends Message<SplitAssetRequest> {
 }
 
 /**
- * Returns the two asset IDs created from the split.
+ * @generated from message proto.hummingbird.v1.SplitBwOption
+ */
+export class SplitBwOption extends Message<SplitBwOption> {
+  /**
+   * @generated from field: repeated uint32 splits = 1;
+   */
+  splits: number[] = [];
+
+  constructor(data?: PartialMessage<SplitBwOption>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.SplitBwOption";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "splits", kind: "scalar", T: 13 /* ScalarType.UINT32 */, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SplitBwOption {
+    return new SplitBwOption().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SplitBwOption {
+    return new SplitBwOption().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SplitBwOption {
+    return new SplitBwOption().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SplitBwOption | PlainMessage<SplitBwOption> | undefined, b: SplitBwOption | PlainMessage<SplitBwOption> | undefined): boolean {
+    return proto3.util.equals(SplitBwOption, a, b);
+  }
+}
+
+/**
+ * @generated from message proto.hummingbird.v1.SplitTimeOption
+ */
+export class SplitTimeOption extends Message<SplitTimeOption> {
+  /**
+   * @generated from field: repeated google.protobuf.Timestamp splits = 1;
+   */
+  splits: Timestamp[] = [];
+
+  constructor(data?: PartialMessage<SplitTimeOption>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.SplitTimeOption";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "splits", kind: "message", T: Timestamp, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SplitTimeOption {
+    return new SplitTimeOption().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SplitTimeOption {
+    return new SplitTimeOption().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SplitTimeOption {
+    return new SplitTimeOption().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SplitTimeOption | PlainMessage<SplitTimeOption> | undefined, b: SplitTimeOption | PlainMessage<SplitTimeOption> | undefined): boolean {
+    return proto3.util.equals(SplitTimeOption, a, b);
+  }
+}
+
+/**
+ * Returns the asset IDs created from the split.
  *
  * @generated from message proto.hummingbird.v1.SplitAssetResponse
  */
 export class SplitAssetResponse extends Message<SplitAssetResponse> {
   /**
-   * @generated from field: string asset_id_1 = 1;
+   * @generated from field: repeated bytes asset_ids = 1;
    */
-  assetId1 = "";
-
-  /**
-   * @generated from field: string asset_id_2 = 2;
-   */
-  assetId2 = "";
+  assetIds: Uint8Array[] = [];
 
   constructor(data?: PartialMessage<SplitAssetResponse>) {
     super();
@@ -474,8 +543,7 @@ export class SplitAssetResponse extends Message<SplitAssetResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.SplitAssetResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id_1", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "asset_id_2", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_ids", kind: "scalar", T: 12 /* ScalarType.BYTES */, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SplitAssetResponse {
@@ -496,23 +564,18 @@ export class SplitAssetResponse extends Message<SplitAssetResponse> {
 }
 
 /**
- * When combining assets, both assets must have the same IA, asset_type, ingress and egress.enum
- * Additionally, both assets must either:
- * a) have adjacent validity with same bandwidth, or
+ * When combining assets, all assets must have the same IA, asset_type, ingress and egress.
+ * Additionally, all assets must either:
+ * a) have consecutive validity with same bandwidth, or
  * b) same validity with different bandwidth
  *
  * @generated from message proto.hummingbird.v1.CombineAssetRequest
  */
 export class CombineAssetRequest extends Message<CombineAssetRequest> {
   /**
-   * @generated from field: string asset_id_1 = 1;
+   * @generated from field: repeated bytes asset_ids = 1;
    */
-  assetId1 = "";
-
-  /**
-   * @generated from field: string asset_id_2 = 2;
-   */
-  assetId2 = "";
+  assetIds: Uint8Array[] = [];
 
   constructor(data?: PartialMessage<CombineAssetRequest>) {
     super();
@@ -522,8 +585,7 @@ export class CombineAssetRequest extends Message<CombineAssetRequest> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.CombineAssetRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id_1", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "asset_id_2", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_ids", kind: "scalar", T: 12 /* ScalarType.BYTES */, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CombineAssetRequest {
@@ -544,15 +606,15 @@ export class CombineAssetRequest extends Message<CombineAssetRequest> {
 }
 
 /**
- * Returns the the asset ID created from combining the two assets.
+ * Returns the asset ID created from combining the provided assets.
  *
  * @generated from message proto.hummingbird.v1.CombineAssetResponse
  */
 export class CombineAssetResponse extends Message<CombineAssetResponse> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   constructor(data?: PartialMessage<CombineAssetResponse>) {
     super();
@@ -562,7 +624,7 @@ export class CombineAssetResponse extends Message<CombineAssetResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.CombineAssetResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CombineAssetResponse {
@@ -672,6 +734,11 @@ export class MarketplaceInfoResponse extends Message<MarketplaceInfoResponse> {
    */
   delegationHourlyFee = protoInt64.zero;
 
+  /**
+   * @generated from field: uint32 asset_validity_max = 12;
+   */
+  assetValidityMax = 0;
+
   constructor(data?: PartialMessage<MarketplaceInfoResponse>) {
     super();
     proto3.util.initPartial(data, this);
@@ -691,6 +758,7 @@ export class MarketplaceInfoResponse extends Message<MarketplaceInfoResponse> {
     { no: 9, name: "split_combine_fee_absolute", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 10, name: "supports_redemption_delegation", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 11, name: "delegation_hourly_fee", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 12, name: "asset_validity_max", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarketplaceInfoResponse {
@@ -752,9 +820,9 @@ export class PublishAssetRequest extends Message<PublishAssetRequest> {
  */
 export class PublishAssetResponse extends Message<PublishAssetResponse> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   constructor(data?: PartialMessage<PublishAssetResponse>) {
     super();
@@ -764,7 +832,7 @@ export class PublishAssetResponse extends Message<PublishAssetResponse> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.PublishAssetResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PublishAssetResponse {
@@ -834,7 +902,12 @@ export class PublisherAsset extends Message<PublisherAsset> {
   timeMinDuration = 0;
 
   /**
-   * @generated from field: uint32 price = 10;
+   * @generated from field: uint32 time_max_duration = 10;
+   */
+  timeMaxDuration = 0;
+
+  /**
+   * @generated from field: uint32 price = 11;
    */
   price = 0;
 
@@ -855,7 +928,8 @@ export class PublisherAsset extends Message<PublisherAsset> {
     { no: 7, name: "stops_at", kind: "message", T: Timestamp },
     { no: 8, name: "time_granularity", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 9, name: "time_min_duration", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 10, name: "price", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 10, name: "time_max_duration", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 11, name: "price", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PublisherAsset {
@@ -919,6 +993,18 @@ export class SearchAssetsRequest extends Message<SearchAssetsRequest> {
    */
   price?: number;
 
+  /**
+   * @generated from field: uint32 page = 9;
+   */
+  page = 0;
+
+  /**
+   * The marketplace may return less assets per page than requested.
+   *
+   * @generated from field: optional uint32 max_returned_assets = 10;
+   */
+  maxReturnedAssets?: number;
+
   constructor(data?: PartialMessage<SearchAssetsRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -935,6 +1021,8 @@ export class SearchAssetsRequest extends Message<SearchAssetsRequest> {
     { no: 6, name: "starts_at_latest", kind: "message", T: Timestamp, opt: true },
     { no: 7, name: "stops_at_earliest", kind: "message", T: Timestamp, opt: true },
     { no: 8, name: "price", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
+    { no: 9, name: "page", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 10, name: "max_returned_assets", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchAssetsRequest {
@@ -996,9 +1084,9 @@ export class SearchAssetsResponse extends Message<SearchAssetsResponse> {
  */
 export class SearchAsset extends Message<SearchAsset> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   /**
    * @generated from field: uint64 ia = 2;
@@ -1051,7 +1139,12 @@ export class SearchAsset extends Message<SearchAsset> {
   timeMinDuration = 0;
 
   /**
-   * @generated from field: uint32 price = 12;
+   * @generated from field: uint32 time_max_duration = 12;
+   */
+  timeMaxDuration = 0;
+
+  /**
+   * @generated from field: uint32 price = 13;
    */
   price = 0;
 
@@ -1063,7 +1156,7 @@ export class SearchAsset extends Message<SearchAsset> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.SearchAsset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "ia", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 3, name: "if_id_ingress", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
     { no: 4, name: "if_id_egress", kind: "scalar", T: 13 /* ScalarType.UINT32 */, opt: true },
@@ -1074,7 +1167,8 @@ export class SearchAsset extends Message<SearchAsset> {
     { no: 9, name: "stops_at", kind: "message", T: Timestamp },
     { no: 10, name: "time_granularity", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 11, name: "time_min_duration", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
-    { no: 12, name: "price", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 12, name: "time_max_duration", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
+    { no: 13, name: "price", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SearchAsset {
@@ -1142,9 +1236,9 @@ export class BuyAssetsRequest extends Message<BuyAssetsRequest> {
  */
 export class BuyAsset extends Message<BuyAsset> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   /**
    * @generated from field: google.protobuf.Timestamp starts_at_exactly = 2;
@@ -1169,7 +1263,7 @@ export class BuyAsset extends Message<BuyAsset> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.BuyAsset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "starts_at_exactly", kind: "message", T: Timestamp },
     { no: 3, name: "stops_at_exactly", kind: "message", T: Timestamp },
     { no: 4, name: "bandwidth_exact", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
@@ -1240,9 +1334,9 @@ export class BuyAssetsResponse extends Message<BuyAssetsResponse> {
  */
 export class BoughtAsset extends Message<BoughtAsset> {
   /**
-   * @generated from field: string asset_id = 1;
+   * @generated from field: bytes asset_id = 1;
    */
-  assetId = "";
+  assetId = new Uint8Array(0);
 
   constructor(data?: PartialMessage<BoughtAsset>) {
     super();
@@ -1252,7 +1346,7 @@ export class BoughtAsset extends Message<BoughtAsset> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.BoughtAsset";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BoughtAsset {
@@ -1287,9 +1381,9 @@ export class RedeemAssetRequest extends Message<RedeemAssetRequest> {
     case: "pair";
   } | {
     /**
-     * @generated from field: string if_pair_asset_id = 3;
+     * @generated from field: bytes if_pair_asset_id = 3;
      */
-    value: string;
+    value: Uint8Array;
     case: "ifPairAssetId";
   } | { case: undefined; value?: undefined } = { case: undefined };
 
@@ -1302,7 +1396,7 @@ export class RedeemAssetRequest extends Message<RedeemAssetRequest> {
   static readonly typeName = "proto.hummingbird.v1.RedeemAssetRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "pair", kind: "message", T: IngressEgressPair, oneof: "interfaces" },
-    { no: 3, name: "if_pair_asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */, oneof: "interfaces" },
+    { no: 3, name: "if_pair_asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */, oneof: "interfaces" },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RedeemAssetRequest {
@@ -1327,14 +1421,14 @@ export class RedeemAssetRequest extends Message<RedeemAssetRequest> {
  */
 export class IngressEgressPair extends Message<IngressEgressPair> {
   /**
-   * @generated from field: string ingress_asset_id = 1;
+   * @generated from field: bytes ingress_asset_id = 1;
    */
-  ingressAssetId = "";
+  ingressAssetId = new Uint8Array(0);
 
   /**
-   * @generated from field: string egress_asset_id = 2;
+   * @generated from field: bytes egress_asset_id = 2;
    */
-  egressAssetId = "";
+  egressAssetId = new Uint8Array(0);
 
   constructor(data?: PartialMessage<IngressEgressPair>) {
     super();
@@ -1344,8 +1438,8 @@ export class IngressEgressPair extends Message<IngressEgressPair> {
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "proto.hummingbird.v1.IngressEgressPair";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "ingress_asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "egress_asset_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "ingress_asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "egress_asset_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): IngressEgressPair {

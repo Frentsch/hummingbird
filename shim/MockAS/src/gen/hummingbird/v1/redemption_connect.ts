@@ -17,7 +17,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { RedeemAssetFromASRequest, RedeemAssetFromASResponse } from "./redemption_pb.js";
+import { DelegateRedemptionRequest, DelegateRedemptionResponse, RedeemAssetFromASRequest, RedeemAssetFromASResponse } from "./redemption_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -34,6 +34,15 @@ export const RedemptionService = {
       I: RedeemAssetFromASResponse,
       O: RedeemAssetFromASRequest,
       kind: MethodKind.BiDiStreaming,
+    },
+    /**
+     * @generated from rpc proto.hummingbird.v1.RedemptionService.DelegateRedemption
+     */
+    delegateRedemption: {
+      name: "DelegateRedemption",
+      I: DelegateRedemptionRequest,
+      O: DelegateRedemptionResponse,
+      kind: MethodKind.Unary,
     },
   }
 } as const;

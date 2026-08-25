@@ -5,7 +5,7 @@ import { parseHummingbirdAssetFields } from '@sui-shim/core';
 function assetFromFields(objectId: string, assetFields: Record<string, unknown>, price: number): SearchAsset {
     const asset = parseHummingbirdAssetFields(assetFields);
     return new SearchAsset({
-        assetId: BigInt(objectId).toString(),
+        assetId: suiHexToBytes(objectId),
         ia: asset.isdAsId,
         ...(asset.ifIngressId !== null ? { ifIdIngress: asset.ifIngressId } : {}),
         ...(asset.ifEgressId !== null ? { ifIdEgress: asset.ifEgressId } : {}),
@@ -46,4 +46,12 @@ export function ListingToQueryAsset(obj: { objectId: string; json: Record<string
 
 export function BigIntToUID(id: BigInt) {
     return '0x' + id.toString(16).padStart(64, '0');
+}
+
+export function bytesToSuiHex(bytes: Uint8Array): string {
+  return '0x' + Buffer.from(bytes).toString('hex').padStart(64,"0")
+}
+
+export function suiHexToBytes(hex: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(Buffer.from(hex.substring(1), 'hex'))
 }

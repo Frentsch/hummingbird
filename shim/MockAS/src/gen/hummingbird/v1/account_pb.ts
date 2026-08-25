@@ -22,6 +22,74 @@ import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
 import { SignedMessage } from "../../crypto/v1/signed_pb.js";
 
 /**
+ * @generated from message proto.hummingbird.v1.SetPasswordRequest
+ */
+export class SetPasswordRequest extends Message<SetPasswordRequest> {
+  /**
+   * @generated from field: string password = 1;
+   */
+  password = "";
+
+  constructor(data?: PartialMessage<SetPasswordRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.SetPasswordRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "password", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetPasswordRequest {
+    return new SetPasswordRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SetPasswordRequest {
+    return new SetPasswordRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SetPasswordRequest {
+    return new SetPasswordRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SetPasswordRequest | PlainMessage<SetPasswordRequest> | undefined, b: SetPasswordRequest | PlainMessage<SetPasswordRequest> | undefined): boolean {
+    return proto3.util.equals(SetPasswordRequest, a, b);
+  }
+}
+
+/**
+ * @generated from message proto.hummingbird.v1.SetPasswordResponse
+ */
+export class SetPasswordResponse extends Message<SetPasswordResponse> {
+  constructor(data?: PartialMessage<SetPasswordResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "proto.hummingbird.v1.SetPasswordResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetPasswordResponse {
+    return new SetPasswordResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SetPasswordResponse {
+    return new SetPasswordResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SetPasswordResponse {
+    return new SetPasswordResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SetPasswordResponse | PlainMessage<SetPasswordResponse> | undefined, b: SetPasswordResponse | PlainMessage<SetPasswordResponse> | undefined): boolean {
+    return proto3.util.equals(SetPasswordResponse, a, b);
+  }
+}
+
+/**
  * @generated from message proto.hummingbird.v1.RegisterASRequest
  */
 export class RegisterASRequest extends Message<RegisterASRequest> {

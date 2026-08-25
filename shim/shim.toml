@@ -14,9 +14,9 @@ globalRegistryId = "0x1740ccb3a8ce6c172d1c71d491dd3083e3963a3c41513885742f612b86
 
 [as]
 isdAsId = "1-ff00:0:111"
-asRegistryId = "0x8304002a4e76d505ec2e34ad745a8f834cf7e99a7bedc30f7a378350fe14e63f"
-asAuthCapId = "0x8b17716db893d9e40f1bcc176ce206c7dd6a2e76db2f7de266625db95735adca"
-sellerAuthTokenId = "0x47eba139c4fafe6433d9803da067ddb2bbb904bf221ec3586742e391fbdb76e7"
+asRegistryId = "0x930c9d64a2f580bb36ba1e5c78becef86d68ad14b1ea6a0633a81ea6aed1ca8b"
+asAuthCapId = "0xd2ac11a2fc936fc0f5d27dac8fe132a8e02aba316e82f2ced3aa13deacc9b372"
+sellerAuthTokenId = "0x5a0de254920f1be5694bee85b9e987e0688b451a5696b31ce29ac5c6fcb9202c"
 interfaces = [ "0x66cfd8708c083f60407b74f824239e28ebafbdaf14ad01faf95c27ee2b85fd17", "0x765c68d5c4ed4b3d882c231c17185677fa503fcc804dccf4db12ad09090fea96" ]
 
 [redemption]
