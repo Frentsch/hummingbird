@@ -202,6 +202,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         expTime: BigInt(Math.floor(stop)),
         timeGranularity: BigInt(asset.timeGranularity),
         timeMinDuration: BigInt(asset.timeGranularity),
+        timeMaxDuration: BigInt(asset.timeMaxDuration),
         minBandwidth: BigInt(asset.bandwidthMin),
         price: BigInt(asset.price),
         issuer: state.signer.getPublicKey().toSuiAddress(),

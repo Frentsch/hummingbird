@@ -1,10 +1,6 @@
 module hummingbird::hummingbird_asset {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::event;
     use std::u64;
-    use std::option::{Self,Option};
     use hummingbird::registry::{AsAuthCap, cap_isd_as_id};
 
 
@@ -18,7 +14,6 @@ module hummingbird::hummingbird_asset {
     const ENonOverlappingAssets: u64 = 6;
     const EAssetError: u64 = 8;
 
-    /// Bandwidth reservation token for a single router interface.
     /// Bandwidth is in multiples of 1 kbps.
     public struct HummingbirdAsset has key, store {
         id: UID,
@@ -30,6 +25,7 @@ module hummingbird::hummingbird_asset {
         exp_time: u64,
         time_granularity: u64,
         time_min_duration: u64,
+        time_max_duration: u64,
         min_bandwidth: u64,
         issuer: address,
     }
@@ -42,7 +38,7 @@ module hummingbird::hummingbird_asset {
         buyer: address,
     }
 
-    /// Proof-of-reservation delivered to the buyer after the AS fulfils the redeem request.
+    /// Reservation recipt used to persist and query obtained reservations
     public struct Reservation has key, store {
         id: UID,
         isd_as_id: u64,
@@ -51,6 +47,7 @@ module hummingbird::hummingbird_asset {
         start_time: u64,
         end_time: u64,
         bandwidth: u64,
+        dataplane_encoding: u32,
         encrypted_reservation: vector<u8>,
     }
 
@@ -66,7 +63,7 @@ module hummingbird::hummingbird_asset {
         encrypted_reservation: vector<u8>,
         res_id: u64,
         bw_rounded: u64,
-        bw_dataplane_encoding: u16,
+        bw_dataplane_encoding: u32,
     }
 
     // --- Getters ---
@@ -79,6 +76,7 @@ module hummingbird::hummingbird_asset {
     public fun get_exp_time(a: &HummingbirdAsset): u64 { a.exp_time }
     public fun get_time_granularity(a: &HummingbirdAsset): u64 { a.time_granularity }
     public fun get_time_min_duration(a: &HummingbirdAsset): u64 { a.time_min_duration }
+    public fun get_time_max_duration(a: &HummingbirdAsset): u64 { a.time_max_duration }
     public fun get_min_bandwidth(a: &HummingbirdAsset): u64 { a.min_bandwidth }
     public fun get_issuer(a: &HummingbirdAsset): address { a.issuer }
 
@@ -94,6 +92,7 @@ module hummingbird::hummingbird_asset {
         exp_time: u64,
         time_granularity: u64,
         time_min_duration: u64,
+        time_max_duration: u64,
         min_bandwidth: u64,
         issuer: address,
         ctx: &mut TxContext,
@@ -117,6 +116,7 @@ module hummingbird::hummingbird_asset {
             exp_time,
             time_granularity,
             time_min_duration,
+            time_max_duration,
             min_bandwidth,
             issuer,
         }
@@ -127,9 +127,17 @@ module hummingbird::hummingbird_asset {
             id, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: _, start_time: _, exp_time: _,
             time_granularity: _, 
-            time_min_duration: _, min_bandwidth: _, issuer: _,
+            time_min_duration: _, 
+            time_max_duration:_, min_bandwidth: _, issuer: _,
         } = a;
         object::delete(id);
+    }
+
+    public fun destroy_reservation(r: Reservation) {
+        let Reservation {
+            id, isd_as_id: _, ingress_id: _, egress_id: _,start_time:_, end_time:_, bandwidth:_, dataplane_encoding: _, encrypted_reservation: _
+        } = r;
+        object::delete(id)
     }
 
     // --- Split ---
@@ -159,6 +167,7 @@ module hummingbird::hummingbird_asset {
             exp_time: a.exp_time,
             time_granularity: a.time_granularity,
             time_min_duration: a.time_min_duration,
+            time_max_duration: a.time_max_duration,
             min_bandwidth: a.min_bandwidth,
             issuer: a.issuer,
         };
@@ -188,6 +197,7 @@ module hummingbird::hummingbird_asset {
             exp_time: a.exp_time,
             time_granularity: a.time_granularity,
             time_min_duration: a.time_min_duration,
+            time_max_duration: a.time_max_duration,
             min_bandwidth: a.min_bandwidth,
             issuer: a.issuer,
         };
@@ -212,7 +222,7 @@ module hummingbird::hummingbird_asset {
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
-            time_granularity: _, time_min_duration: _,
+            time_granularity: _, time_min_duration: _, time_max_duration: _,
             min_bandwidth: smin, issuer: _,
         } = second;
         object::delete(sid);
@@ -229,7 +239,7 @@ module hummingbird::hummingbird_asset {
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
             bandwidth: sbw, start_time: sst, exp_time: set,
-            time_granularity: _, time_min_duration: _, min_bandwidth: smin, issuer: _,
+            time_granularity: _, time_min_duration: _, time_max_duration: _, min_bandwidth: smin, issuer: _,
         } = second;
         object::delete(sid);
         first.start_time = u64::max(first.start_time, sst);
@@ -306,11 +316,11 @@ module hummingbird::hummingbird_asset {
         encrypted_reservation: vector<u8>,
         res_id: u64,
         bw_rounded: u64,
-        bw_dataplane_encoding: u16,
+        bw_dataplane_encoding: u32,
         ctx: &mut TxContext,
     ) {
         let redeem_request_id = object::id(&req);
-        let RedeemRequest { id: wid, ingress_egress_asset, public_key, buyer } = req;
+        let RedeemRequest { id: wid, ingress_egress_asset, public_key, buyer: _ } = req;
         let isd_as_id = ingress_egress_asset.isd_as_id;
         object::delete(wid);
         /*let reservation = Reservation {

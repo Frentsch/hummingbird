@@ -23,6 +23,8 @@ export interface CreateListingParams {
   timeGranularity: bigint;
   /** Minimum purchasable time slice in seconds (u64). */
   timeMinDuration: bigint;
+  /** Minimum purchasable time slice in seconds (u64). */
+  timeMaxDuration: bigint;
   /** Minimum purchasable bandwidth in kbps (u64). */
   minBandwidth: bigint;
   /** Price in base coin units (u64). */
@@ -38,7 +40,7 @@ export interface CreateListingParams {
  *   1. Calls hummingbird_asset::issue (requires AsAuthCap) to mint the asset.
  *   2. Calls marketplace::create_listing to wrap it in a listing on the interface.
  */
-export function buildCreateListing(params: CreateListingParams): Transaction {
+export function buildCreateListing( params: CreateListingParams): Transaction {
   const tx = new Transaction();
 
   const asset = tx.moveCall({
@@ -53,6 +55,7 @@ export function buildCreateListing(params: CreateListingParams): Transaction {
       tx.pure.u64(params.expTime),
       tx.pure.u64(params.timeGranularity),
       tx.pure.u64(params.timeMinDuration),
+      tx.pure.u64(params.timeMaxDuration), //TODO uncomment after contract update
       tx.pure.u64(params.minBandwidth),
       tx.pure.address(params.issuer),
     ],

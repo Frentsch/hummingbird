@@ -119,9 +119,9 @@ module hummingbird::marketplace {
         start_time: u64,
         exp_time: u64,
         bandwidth: u64,
-        payment: Coin<COIN>,
+        payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
-    ): (HummingbirdAsset, Coin<COIN>) {
+    ): HummingbirdAsset {
         let mut listing = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
 
         listing = extract_by_time(interface, listing, start_time, exp_time, ctx);
@@ -132,9 +132,9 @@ module hummingbird::marketplace {
             interface.interface_listings().add(object::id(&upper), upper);
         };
 
-        let (asset, change) = execute_payment(listing, payment, ctx);
+        let asset = execute_payment(listing, payment, ctx);
         
-        (asset, change)
+        asset 
     }
 
     #[lint_allow(self_transfer)]
@@ -144,12 +144,11 @@ module hummingbird::marketplace {
         start_time: u64,
         exp_time: u64,
         bandwidth: u64,
-        payment: Coin<COIN>,
+        payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
     ) {
-        let (asset, change) = buy(interface, listing_id, start_time, exp_time, bandwidth, payment, ctx);
+        let asset = buy(interface, listing_id, start_time, exp_time, bandwidth, payment, ctx);
         transfer::public_transfer(asset, tx_context::sender(ctx));
-        transfer::public_transfer(change, tx_context::sender(ctx));
     }
 
     // --- Delist ---
@@ -280,9 +279,9 @@ module hummingbird::marketplace {
     /// Destroy the listing wrapper, pay the seller, return the asset and coin change.
     fun execute_payment<COIN>(
         listing: AssetListing<COIN>,
-        mut payment: Coin<COIN>,
+        mut payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
-    ): (HummingbirdAsset, Coin<COIN>) {
+    ): HummingbirdAsset {
         let AssetListing<COIN> {
             id, interface: _, asset, price, seller,
         } = listing;
@@ -290,10 +289,10 @@ module hummingbird::marketplace {
         let duration        = hummingbird_asset::get_exp_time(&asset) - hummingbird_asset::get_start_time(&asset);
         let bw              = hummingbird_asset::get_bandwidth(&asset);
         let effective_price = duration * bw * price;
-        assert!(coin::value(&payment) >= effective_price, EInsufficientPayment);
-        let payment_coin = coin::split(&mut payment, effective_price, ctx);
+        assert!(coin::value(payment) >= effective_price, EInsufficientPayment);
+        let payment_coin = coin::split(payment, effective_price, ctx);
         transfer::public_transfer(payment_coin, seller.payment_address);
-        (asset, payment)
+        asset
     }
 
 }
