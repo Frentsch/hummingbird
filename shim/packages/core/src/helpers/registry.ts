@@ -1,6 +1,7 @@
 import { deriveObjectID } from '@mysten/sui/utils';
 import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiGraphQLClient } from '../sui-client.js';
+import { deriveIfIdFromAS } from '../helpers.js';
 
 // In the GraphQL JSON representation:
 //   - Structs are plain JSON objects (no `fields` wrapper)
@@ -53,8 +54,7 @@ export async function getAllInterfacesOf(asRegistryId: string, client: SuiGraphQ
     while (true) {
         const result: SuiClientTypes.ListDynamicFieldsResponse = await client.listDynamicFields({ parentId: bagId, cursor });
         interfaceIds.push(...result.dynamicFields.map(f => {
-            // Key is a u16; name.bcs is a raw Uint8Array (BCS-encoded u16)
-            return deriveObjectID(asRegistryId, 'u16', f.name.bcs);
+            return deriveObjectID(asRegistryId, 'u32', f.name.bcs);
         }));
         if (!result.hasNextPage) break;
         cursor = result.cursor;

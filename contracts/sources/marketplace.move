@@ -1,13 +1,7 @@
 module hummingbird::marketplace {
-    use std::vector;
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
-    use sui::object_bag::{Self, ObjectBag};
-    use sui::event;
-    use sui::clock::{Self, Clock};
-    use std::option::{Self, Option};
+    use sui::object_bag::{Self};
+    use sui::clock::{Clock};
     use hummingbird::hummingbird_asset::{Self, HummingbirdAsset};
     use hummingbird::registry::{Self, AsRegistry, AsAuthCap, Interface};
 
@@ -48,7 +42,7 @@ module hummingbird::marketplace {
     public entry fun create_interface(
         as_registry: &mut AsRegistry,
         cap: &AsAuthCap,
-        interface_id: u16,
+        interface_id: u32,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -61,7 +55,6 @@ module hummingbird::marketplace {
         SellerAuthToken { id: object::new(ctx), payment_address }
     }
 
-    #[lint_allow(self_transfer)]
     public entry fun register_seller_to_sender(payment_address: address, ctx: &mut TxContext) {
         transfer::transfer(register_seller(payment_address, ctx), tx_context::sender(ctx));
     }
@@ -100,7 +93,6 @@ module hummingbird::marketplace {
         listing_id
     }
 
-    #[lint_allow(self_transfer)]
     public entry fun create_listing_entry<COIN>(
         interface: &mut Interface,
         asset: HummingbirdAsset,
@@ -118,7 +110,7 @@ module hummingbird::marketplace {
         listing_id: ID,
         start_time: u64,
         exp_time: u64,
-        bandwidth: u64,
+        bandwidth: u32,
         payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
@@ -137,13 +129,12 @@ module hummingbird::marketplace {
         asset 
     }
 
-    #[lint_allow(self_transfer)]
     public entry fun buy_and_take<COIN>(
         interface: &mut Interface,
         listing_id: ID,
         start_time: u64,
         exp_time: u64,
-        bandwidth: u64,
+        bandwidth: u32,
         payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
     ) {
@@ -166,7 +157,6 @@ module hummingbird::marketplace {
         asset
     }
 
-    #[lint_allow(self_transfer)]
     public entry fun delist_and_take<COIN>(
         interface: &mut Interface,
         listing_id: ID,
@@ -221,14 +211,16 @@ module hummingbird::marketplace {
 
     fun split_listing_bandwidth<COIN>(
         listing: &mut AssetListing<COIN>,
-        split_bw: u64,
+        split_bw: u32,
         ctx: &mut TxContext,
     ): AssetListing<COIN> {
         let old_bw = hummingbird_asset::get_bandwidth(&listing.asset);
-        let min_bw = hummingbird_asset::get_min_bandwidth(&listing.asset);
+        let min_bw = hummingbird_asset::get_bandwidth_min(&listing.asset);
+        let max_bw = hummingbird_asset::get_bandwidth_max(&listing.asset);
         assert!(
             split_bw < old_bw
                 && split_bw >= min_bw
+                && max_bw >= split_bw
                 && old_bw - split_bw >= min_bw,
             EInvalidBandwidth
         );
@@ -288,7 +280,7 @@ module hummingbird::marketplace {
         object::delete(id);
         let duration        = hummingbird_asset::get_exp_time(&asset) - hummingbird_asset::get_start_time(&asset);
         let bw              = hummingbird_asset::get_bandwidth(&asset);
-        let effective_price = duration * bw * price;
+        let effective_price = duration * (bw as u64) * price;
         assert!(coin::value(payment) >= effective_price, EInsufficientPayment);
         let payment_coin = coin::split(payment, effective_price, ctx);
         transfer::public_transfer(payment_coin, seller.payment_address);

@@ -47,23 +47,31 @@ export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImp
       // Drive both directions concurrently via async iteration
       const incoming = (async () => {
         for await (const _msg of stream) {
-          //console.log("redemption key received from AS");
-          if(!_msg.ak || !_msg.requestId) continue; // only the initiating response should be empty and ignored
-          //console.log(_msg);
+          console.log("redemption key received from AS");
+          console.log(_msg);
+          if(!_msg.requestId) continue; // only the initiating response should be empty and ignored
           const pending = state.pendingRedemptions.get(BigInt(_msg.requestId));
           if(!pending) continue;
           console.log("matches pending redemption");
-          if(!_msg.resInfo) throw new ConnectError("Must Provide reservation Information (resId, bwRounded, bwDataplaneEncoding)");
-          console.log(pending.requestObjectId);
-          const encryptedReservation = await sealToPublicKey(pending.publicKey, new TextEncoder().encode(_msg.ak));
+          if (_msg.result.case === "error"){
+            //TODO inform buyer about error through chain
+            console.log(_msg.result.value)
+          }else{
+            if(!_msg.result.value) throw new ConnectError("Must Provide reservation Information (resId, bwRounded, bwDataplaneEncoding)");
+            const resInfo = _msg.result.value
+            console.log(pending.requestObjectId);
+            const encryptedReservation = await sealToPublicKey(pending.publicKey, resInfo.authenticationKey);
 
-          const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId: pending.requestObjectId, encryptedReservation, resId: _msg.resInfo!.resId, bwRounded: _msg.resInfo!.bwRounded, bwDataplaneEncoding: _msg.resInfo!.bwDataplaneEncoding});
-          const result = await executeTransaction(
-                  state.client as Parameters<typeof executeTransaction>[0],
-                  state.signer,
-                  tx,
-          );
-          console.log(result);
+            const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId: pending.requestObjectId, encryptedReservation, resId: BigInt(resInfo.reservationId), bwRounded: BigInt(resInfo.bandwithRounded), bwDataplaneEncoding: resInfo.bwDataplaneEncoding});
+            const result = await executeTransaction(
+                    state.client as Parameters<typeof executeTransaction>[0],
+                    state.signer,
+                    tx,
+            );
+            console.log("delivered reservation")
+            console.log(result);
+          }
+          
           state.pendingRedemptions.delete(BigInt(_msg.requestId));
         }
       })();

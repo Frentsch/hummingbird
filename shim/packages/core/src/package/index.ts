@@ -1,9 +1,6 @@
 export { moveTarget, DEFAULT_COIN_TYPE, DEFAULT_NETWORK, OPERATIONS, OPERATION_NAMES } from './manifest.js';
 export type { Network, OperationDef, OperationName } from './manifest.js';
 
-export { buildRegisterAs } from './registerAs.js';
-export type { RegisterAsParams } from './registerAs.js';
-
 export { buildRegisterSeller } from './registerSeller.js';
 export type { RegisterSellerParams } from './registerSeller.js';
 
@@ -27,5 +24,3 @@ export type { DeliverReservationParams } from './deliverReservation.js';
 export { buildDelistAndTake } from './delistAndTake.js';
 export type { DelistAndTakeParams } from './delistAndTake.js';
 
-export { buildRegisterAsFor } from './registerAsFor.js';
-export type { RegisterAsForParams } from './registerAsFor.js';

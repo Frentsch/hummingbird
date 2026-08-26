@@ -1,6 +1,6 @@
 module hummingbird::hummingbird_asset {
     use sui::event;
-    use std::u64;
+    use std::{u32,u64};
     use hummingbird::registry::{AsAuthCap, cap_isd_as_id};
 
 
@@ -18,15 +18,17 @@ module hummingbird::hummingbird_asset {
     public struct HummingbirdAsset has key, store {
         id: UID,
         isd_as_id: u64,
-        if_ingress_id: Option<u16>,
-        if_egress_id: Option<u16>,
-        bandwidth: u64,
+        if_ingress_id: Option<u32>,
+        if_egress_id: Option<u32>,
+        bandwidth: u32,
         start_time: u64,
         exp_time: u64,
+        router_only: bool,
         time_granularity: u64,
         time_min_duration: u64,
         time_max_duration: u64,
-        min_bandwidth: u64,
+        bandwidth_min: u32,
+        bandwidth_max: u32,
         issuer: address,
     }
 
@@ -42,11 +44,11 @@ module hummingbird::hummingbird_asset {
     public struct Reservation has key, store {
         id: UID,
         isd_as_id: u64,
-        ingress_id: u16,
-        egress_id: u16,
+        ingress_id: u32,
+        egress_id: u32,
         start_time: u64,
         end_time: u64,
-        bandwidth: u64,
+        bandwidth: u32,
         dataplane_encoding: u32,
         encrypted_reservation: vector<u8>,
     }
@@ -69,37 +71,42 @@ module hummingbird::hummingbird_asset {
     // --- Getters ---
 
     public fun get_isd_as_id(a: &HummingbirdAsset): u64 { a.isd_as_id }
-    public fun get_ingress_id(a: &HummingbirdAsset): Option<u16> { a.if_ingress_id }
-    public fun get_egress_id(a: &HummingbirdAsset): Option<u16> { a.if_egress_id }
-    public fun get_bandwidth(a: &HummingbirdAsset): u64 { a.bandwidth }
+    public fun get_ingress_id(a: &HummingbirdAsset): Option<u32> { a.if_ingress_id }
+    public fun get_egress_id(a: &HummingbirdAsset): Option<u32> { a.if_egress_id }
+    public fun get_bandwidth(a: &HummingbirdAsset): u32 { a.bandwidth }
     public fun get_start_time(a: &HummingbirdAsset): u64 { a.start_time }
     public fun get_exp_time(a: &HummingbirdAsset): u64 { a.exp_time }
     public fun get_time_granularity(a: &HummingbirdAsset): u64 { a.time_granularity }
     public fun get_time_min_duration(a: &HummingbirdAsset): u64 { a.time_min_duration }
     public fun get_time_max_duration(a: &HummingbirdAsset): u64 { a.time_max_duration }
-    public fun get_min_bandwidth(a: &HummingbirdAsset): u64 { a.min_bandwidth }
+    public fun get_bandwidth_min(a: &HummingbirdAsset): u32 { a.bandwidth_min }
+    public fun get_bandwidth_max(a: &HummingbirdAsset): u32 { a.bandwidth_max}
     public fun get_issuer(a: &HummingbirdAsset): address { a.issuer }
+    public fun get_router_only(a: &HummingbirdAsset): bool { a.router_only }
 
     // --- Issue / destroy ---
 
     public fun issue(
         cap: &AsAuthCap,
         isd_as_id: u64,
-        if_ingress_id: Option<u16>,
-        if_egress_id: Option<u16>,
-        bandwidth: u64,
+        if_ingress_id: Option<u32>,
+        if_egress_id: Option<u32>,
+        bandwidth: u32,
         start_time: u64,
         exp_time: u64,
+        router_only: bool,
         time_granularity: u64,
         time_min_duration: u64,
         time_max_duration: u64,
-        min_bandwidth: u64,
+        bandwidth_min: u32,
+        bandwidth_max: u32,
         issuer: address,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
         assert!(cap_isd_as_id(cap) == isd_as_id, EUnauthorized);
-        assert!(exp_time > start_time, EInvalidTimeInterval);
-        assert!(bandwidth >= min_bandwidth && min_bandwidth > 0, EInvalidBandwidth);
+        let duration = exp_time - start_time;
+        assert!(exp_time > start_time &&  time_max_duration >= duration && duration >= time_min_duration, EInvalidTimeInterval);
+        assert!(bandwidth_max >= bandwidth && bandwidth >= bandwidth_min && bandwidth_min > 0, EInvalidBandwidth);
         assert!(
             time_granularity > 0
                 && (exp_time - start_time) % time_granularity == 0,
@@ -114,10 +121,12 @@ module hummingbird::hummingbird_asset {
             bandwidth,
             start_time,
             exp_time,
+            router_only,
             time_granularity,
             time_min_duration,
             time_max_duration,
-            min_bandwidth,
+            bandwidth_min,
+            bandwidth_max,
             issuer,
         }
     }
@@ -125,10 +134,10 @@ module hummingbird::hummingbird_asset {
     public fun destroy(a: HummingbirdAsset) {
         let HummingbirdAsset {
             id, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
-            bandwidth: _, start_time: _, exp_time: _,
+            bandwidth: _, start_time: _, exp_time: _, router_only: _,
             time_granularity: _, 
             time_min_duration: _, 
-            time_max_duration:_, min_bandwidth: _, issuer: _,
+            time_max_duration:_, bandwidth_min: _, bandwidth_max: _, issuer: _,
         } = a;
         object::delete(id);
     }
@@ -165,10 +174,12 @@ module hummingbird::hummingbird_asset {
             bandwidth: a.bandwidth,
             start_time: split_time,
             exp_time: a.exp_time,
+            router_only: a.router_only,
             time_granularity: a.time_granularity,
             time_min_duration: a.time_min_duration,
             time_max_duration: a.time_max_duration,
-            min_bandwidth: a.min_bandwidth,
+            bandwidth_min: a.bandwidth_min,
+            bandwidth_max: a.bandwidth_max,
             issuer: a.issuer,
         };
         a.exp_time = split_time;
@@ -178,13 +189,13 @@ module hummingbird::hummingbird_asset {
     /// Original keeps [0, split_bw]; returned asset covers (split_bw, B].
     public fun split_bandwidth(
         a: &mut HummingbirdAsset,
-        split_bw: u64,
+        split_bw: u32,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
         assert!(
             split_bw < a.bandwidth
-                && split_bw >= a.min_bandwidth
-                && a.bandwidth - split_bw >= a.min_bandwidth,
+                && split_bw >= a.bandwidth_min
+                && a.bandwidth - split_bw >= a.bandwidth_min,
             EInvalidBandwidth
         );
         let upper = HummingbirdAsset {
@@ -195,17 +206,17 @@ module hummingbird::hummingbird_asset {
             bandwidth: a.bandwidth - split_bw,
             start_time: a.start_time,
             exp_time: a.exp_time,
+            router_only: a.router_only,
             time_granularity: a.time_granularity,
             time_min_duration: a.time_min_duration,
             time_max_duration: a.time_max_duration,
-            min_bandwidth: a.min_bandwidth,
+            bandwidth_min: a.bandwidth_min,
+            bandwidth_max: a.bandwidth_max,
             issuer: a.issuer,
         };
         a.bandwidth = split_bw;
         upper
     }
-
-    // --- Fuse (deferred use; struct ready now) ---
 
     /// Fuse two assets in time (contiguous or overlapping windows, same interface).
     public fun fuse_time(first: &mut HummingbirdAsset, second: HummingbirdAsset) {
@@ -214,22 +225,19 @@ module hummingbird::hummingbird_asset {
             are_overlapping(first, &second) || are_consecutive(first, &second),
             ENonOverlappingAssets
         );
-        assert!(
-            first.bandwidth >= second.min_bandwidth
-                && second.bandwidth >= first.min_bandwidth,
-            EInsufficientFuseBandwidth
-        );
+
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
-            bandwidth: sbw, start_time: sst, exp_time: set,
+            bandwidth: sbw, start_time: sst, exp_time: set, router_only: _, 
             time_granularity: _, time_min_duration: _, time_max_duration: _,
-            min_bandwidth: smin, issuer: _,
+            bandwidth_min: smin, bandwidth_max: smax, issuer: _,
         } = second;
         object::delete(sid);
         first.start_time = u64::min(first.start_time, sst);
         first.exp_time   = u64::max(first.exp_time, set);
-        first.bandwidth  = u64::min(first.bandwidth, sbw);
-        first.min_bandwidth = u64::max(first.min_bandwidth, smin);
+        first.bandwidth  = u32::min(first.bandwidth, sbw);
+        first.bandwidth_min = u32::max(first.bandwidth_min, smin);
+        first.bandwidth_max = u32::min(first.bandwidth_max, smax )
     }
 
     /// Fuse two assets in bandwidth (overlapping time windows, same interface).
@@ -238,14 +246,15 @@ module hummingbird::hummingbird_asset {
         assert!(are_overlapping(first, &second), ENonOverlappingAssets);
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
-            bandwidth: sbw, start_time: sst, exp_time: set,
-            time_granularity: _, time_min_duration: _, time_max_duration: _, min_bandwidth: smin, issuer: _,
+            bandwidth: sbw, start_time: sst, exp_time: set, router_only: _,
+            time_granularity: _, time_min_duration: _, time_max_duration: _, bandwidth_min: smin, bandwidth_max: smax, issuer: _,
         } = second;
         object::delete(sid);
         first.start_time = u64::max(first.start_time, sst);
         first.exp_time   = u64::min(first.exp_time, set);
         first.bandwidth  = first.bandwidth + sbw;
-        first.min_bandwidth = u64::max(first.min_bandwidth, smin);
+        first.bandwidth_min = u32::max(first.bandwidth_min, smin);
+        first.bandwidth_max = u32::min(first.bandwidth_max, smax);
     }
 
     // --- Redeem flow ---
@@ -292,8 +301,9 @@ module hummingbird::hummingbird_asset {
             option::is_some(&ingress_egress_asset.if_ingress_id)
             && option::is_some(&ingress_egress_asset.if_egress_id),
             EAssetMismatch);
-        assert!(ingress_egress_asset.bandwidth>=ingress_egress_asset.min_bandwidth, EInvalidBandwidth);
-        assert!(ingress_egress_asset.exp_time - ingress_egress_asset.start_time>=ingress_egress_asset.time_min_duration, EInvalidTimeInterval);
+        assert!(ingress_egress_asset.bandwidth_max >= ingress_egress_asset.bandwidth && ingress_egress_asset.bandwidth>=ingress_egress_asset.bandwidth_min, EInvalidBandwidth);
+        let duration = ingress_egress_asset.exp_time - ingress_egress_asset.start_time;
+        assert!(ingress_egress_asset.time_max_duration >= duration && duration >=ingress_egress_asset.time_min_duration, EInvalidTimeInterval);
             
         let issuer_addr = ingress_egress_asset.issuer;
         let req = RedeemRequest {

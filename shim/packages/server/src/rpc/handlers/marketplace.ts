@@ -39,7 +39,6 @@ import {
   DeliveryTimeoutError,
   insertReservation,
   queryReservations,
-  buildRegisterAs,
   buildCreateInterface,
   buildRegisterSeller,
   saveConfig,
@@ -47,6 +46,8 @@ import {
   buildRedeemPair,
   getHummingbirdAsset,
   openSealed,
+  deriveIfIdFromAS,
+  deriveRegistryId,
 } from '@sui-shim/core';
 import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
@@ -57,6 +58,7 @@ import { text } from 'node:stream/consumers';
 import { bigint, config } from 'zod';
 import { TextEncoder } from 'node:util';
 import { _overwrite } from 'zod/v4/core';
+import { stat } from 'node:fs';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -133,7 +135,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       try{
       //create interface if not exists
       const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
-      const interfaceObjectId = deriveObjectID(state.config.as.asRegistryId, 'u16',  bcs.U16.serialize(ifId).toBytes());
+      const interfaceObjectId = deriveIfIdFromAS(state.config.as.asRegistryId,ifId);
       const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
       if (interfaceResult instanceof Error) {
         try{
@@ -176,17 +178,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         await saveConfig(state.config);
       }
 
-
-
       const start = asset.startsAt ? Number(asset.startsAt.seconds)  : Math.floor(Date.now() / 1000);
       const stop = asset.stopsAt ? Number(asset.stopsAt.seconds) : start + 3600;
-
-      /*const interfaceObj = await state.client.getObject({
-        objectId: interfaceObjectId,
-        include: { json: true },
-      });*/
-      //const interfaceFields = getObjectFields(interfaceObj);
-      //const interfaceId = interfaceFields.interface_id as number;
 
       //TODO if a new interface obejct is created, there's a chance this throws object not found. We might need to wait a short interval before executing
       const tx = buildCreateListing({
@@ -197,13 +190,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         asAuthCapId: state.asAuthCapId,
         sellerAuthTokenId: state.sellerAuthTokenId,
         isdAsId: isdAsIdToU64(isdAsId),
-        bandwidth: BigInt(asset.bandwidth) ,
+        bandwidth: asset.bandwidth,
         startTime: BigInt(Math.floor(start)),
         expTime: BigInt(Math.floor(stop)),
+        routerOnly: false,
         timeGranularity: BigInt(asset.timeGranularity),
         timeMinDuration: BigInt(asset.timeGranularity),
         timeMaxDuration: BigInt(asset.timeMaxDuration),
-        minBandwidth: BigInt(asset.bandwidthMin),
+        minBandwidth: asset.bandwidthMin,
+        maxBandwidth: asset.bandwidthMax,
         price: BigInt(asset.price),
         issuer: state.signer.getPublicKey().toSuiAddress(),
         coinType: DEFAULT_COIN_TYPE,
@@ -249,22 +244,22 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         var marketListings: any[] = [];
         if (_req.ia) {
           const isdAsId = _req.ia;
-          const asRegistryId = deriveObjectID(
+          const asRegistryId = deriveRegistryId(state.globalRegistryId, isdAsId)/*deriveObjectID(
             state.globalRegistryId,
             'u64',
             bcs.U64.serialize(isdAsId).toBytes(),
-          );
+          );*/
           
           if (_req.ifIdIngress || _req.ifIdEgress) {
             console.log("Find specific Interface");
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
             if (isdAsId === undefined || interfaceId === undefined) throw new ConnectError("ia and interface id must be specified", Code.InvalidArgument);
 
-            const interfaceObjId = deriveObjectID(
+            const interfaceObjId = deriveIfIdFromAS(asRegistryId, interfaceId) /*deriveObjectID(
               asRegistryId,
-              'u16',
-              bcs.U16.serialize(interfaceId).toBytes(),
-            );
+              'u32',
+              bcs.U32.serialize(interfaceId).toBytes(),
+            );*/
             console.log(`Interface: ${interfaceObjId}`);
 
             marketListings = await getAllListingsOf(interfaceObjId, state.client);
@@ -349,7 +344,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             listingId: bytesToSuiHex(asset.assetId),
             startTime: BigInt(asset.startsAtExactly!.seconds),
             expTime:   BigInt(asset.stopsAtExactly!.seconds),
-            bandwidth: BigInt(asset.bandwidthExact!),
+            bandwidth: asset.bandwidthExact,
             coinType: DEFAULT_COIN_TYPE,
           }, budget);
         }

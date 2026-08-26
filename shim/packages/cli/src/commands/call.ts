@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 import {
-  buildRegisterAs,
   buildRegisterSeller,
   buildCreateInterface,
   buildCreateListing,
@@ -51,35 +50,6 @@ function hexToBytes(hex: string): Uint8Array {
 export function makeCallCommand(): Command {
   const call = new Command('call').description('Build and submit a Move transaction');
 
-  // register-as
-  call.addCommand(
-    configOpt(
-      new Command('register-as')
-        .description('Register this signer as an AS in the global registry')
-        .option('--global-registry-id <id>', 'Global registry shared object ID (fallback: package.globalRegistryId in config)')
-        .option('--set-active','Set the created registry as the default for further commands')
-        .requiredOption('--isd-as-id <ia>', 'ISD-AS identifier (e.g. 1-ff00:0:1)'),
-    ).action(async (opts: { config: string; globalRegistryId?: string;setActive: boolean, isdAsId: string }) => {
-      const ctx = await makeCtx(opts.config);
-      const globalRegistryId = resolve(opts.globalRegistryId, ctx.config.package?.globalRegistryId, 'global-registry-id');
-      const result = await runTx(ctx, buildRegisterAs({ packageId: ctx.config.package.id, globalRegistryId, isdAsId: isdAsIdToU64(opts.isdAsId) }));
-      const registryId = extractCreatedObjectId(result, getObjectType(ctx.config.package.id,"registry","AsRegistry"));
-      const asAuthCapId = extractCreatedObjectId(result, getObjectType(ctx.config.package.id, "registry", "AsAuthCap"));
-      if(registryId){
-        console.log(`Created AS registry for isd-as ${opts.isdAsId} at ${registryId}`);
-      }else{
-        throw new Error("Failed to create AS on chain. Check that the AS registry does not yet exist on chain");
-      }
-
-      if(opts.setActive) {
-        ctx.config.as.isdAsId = opts.isdAsId;
-        ctx.config.as.asRegistryId = registryId;
-        ctx.config.as.asAuthCapId = asAuthCapId;
-        ctx.config.as.interfaces = [];
-        saveConfig(ctx.config, opts.config);
-      }
-    }),
-  );
 
   // register-seller
   call.addCommand(
@@ -181,8 +151,8 @@ export function makeCallCommand(): Command {
           console.log("Must specify one of ingress-id, egress-id or set ingressObjectId in config");
           return;
         }
-        const ingressObjectId = opts.ingressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U16.serialize(opts.ingressId).toBytes()) : undefined;
-        const egressObjectId = opts.egressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U16.serialize(opts.egressId).toBytes()) : undefined;
+        const ingressObjectId = opts.ingressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U32.serialize(opts.ingressId).toBytes()) : undefined;
+        const egressObjectId = opts.egressId ? deriveObjectID(ctx.config.as.asRegistryId!, 'u16', bcs.U32.serialize(opts.egressId).toBytes()) : undefined;
         
         const defaultInterfaceObjectId = ctx.config.as?.interfaces ? ctx.config.as.interfaces[0] : undefined;
         const interfaceObjectId = ingressObjectId ?? (egressObjectId ?? defaultInterfaceObjectId);
@@ -427,7 +397,7 @@ export function makeCallCommand(): Command {
       const interfaceObjId = deriveObjectID(
         asRegistryId,
         'u16',
-        bcs.U16.serialize(opts.interfaceId).toBytes(),
+        bcs.U32.serialize(opts.interfaceId).toBytes(),
       );
       console.log(`Interface: ${interfaceObjId}`);
 

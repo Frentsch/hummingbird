@@ -15,7 +15,8 @@ function assetFromFields(objectId: string, assetFields: Record<string, unknown>,
         startsAt: new Timestamp({ seconds: asset.startTime }),
         stopsAt: new Timestamp({ seconds: asset.expTime }),
         timeGranularity: Number(asset.timeGranularity),
-        timeMinDuration: 0,
+        timeMinDuration: asset.timeMinDuration,
+        timeMaxDuration: 0,
         price,
     });
 }

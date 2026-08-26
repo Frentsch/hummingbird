@@ -1,5 +1,7 @@
 import type { TxResult } from "./execute.js";
 import { SuiTransactionError } from "./errors.js";
+import { deriveObjectID } from "@mysten/sui/utils";
+import { bcs } from "@mysten/sui/bcs";
 
 /** Parse a SCION ISD-AS string (e.g. "1-ff00:0:110") into a u64 bigint. */
 export function isdAsIdToU64(ia: string): bigint {
@@ -52,4 +54,17 @@ export function listingInterfaceId(obj: { object: { json: Record<string, unknown
  */
 export function getObjectFields(obj: { object: { json: Record<string, unknown> | null } }): Record<string, unknown> {
     return obj.object.json ?? {};
+}
+
+
+export function deriveRegistryId(globalRegistryId: string, isdAsId: bigint) : string {
+    return deriveObjectID(globalRegistryId, 'u64',  bcs.U64.serialize(isdAsId).toBytes());
+}
+
+export function deriveIfIdFromAS(asRegistryId: string, ifId: number) : string {
+    return deriveObjectID(asRegistryId, 'u32', bcs.U32.serialize(ifId).toBytes())
+}
+
+export function deriveIfId(globalRegistryId: string, isdAsId: bigint, ifId: number) : string {
+    return deriveIfIdFromAS(deriveRegistryId(globalRegistryId,isdAsId), ifId)
 }

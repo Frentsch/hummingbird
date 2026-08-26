@@ -1,12 +1,9 @@
 module hummingbird::registry {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::bag::{Self, Bag};
     use sui::event;
     use sui::derived_object;
     use sui::object_bag::{Self, ObjectBag};
-    use sui::clock::{Self, Clock};
+    use sui::clock::{Clock};
 
     const EAsAlreadyRegistered: u64 = 0;
     const EInterfaceAlreadyExists: u64 = 1;
@@ -35,7 +32,7 @@ module hummingbird::registry {
     public struct Interface has key {
         id: UID,
         isd_as_id: u64,
-        interface_id: u16,
+        interface_id: u32,
         listings: ObjectBag,
     }
 
@@ -55,7 +52,7 @@ module hummingbird::registry {
     public struct InterfaceRegistered has copy, drop {
         isd_as_id: u64,
         interface_object_id: ID,
-        interface_id: u16,
+        interface_id: u32,
     }
 
     // --- Bootstrap ---
@@ -122,7 +119,7 @@ module hummingbird::registry {
     public fun create_interface(
         as_registry: &mut AsRegistry,
         cap: &AsAuthCap,
-        interface_id: u16,
+        interface_id: u32,
         clock: &Clock,
         ctx: &mut TxContext,
     ) {
@@ -153,15 +150,15 @@ module hummingbird::registry {
 
     public fun get_interface_id(
         as_registry: &AsRegistry,
-        interface_id: u16,
+        interface_id: u32,
     ): ID {
-        *bag::borrow<u16, ID>(&as_registry.interfaces, interface_id)
+        *bag::borrow<u32, ID>(&as_registry.interfaces, interface_id)
     }
 
     public fun cap_isd_as_id(cap: &AsAuthCap): u64 { cap.isd_as_id }
     public fun cap_exp(cap: &AsAuthCap): u64 { cap.exp}
     public fun as_registry_isd_as_id(r: &AsRegistry): u64 { r.isd_as_id }
     public fun interface_isd_as_id(inter: &Interface): u64 { inter.isd_as_id }
-    public fun interface_id(inter: &Interface): u16 { inter.interface_id }
+    public fun interface_id(inter: &Interface): u32 { inter.interface_id }
     public fun interface_listings(inter: &mut Interface): &mut ObjectBag{ &mut inter.listings }
 }

@@ -2,7 +2,6 @@ import { getObjectFields } from '../helpers.js';
 
 /**
  * Mirrors the `HummingbirdAsset` Move struct (hummingbird_asset.move).
- * u64 fields are bigint; Option<u16> fields are number | null.
  */
 export interface HummingbirdAsset {
   id: string;
@@ -13,16 +12,13 @@ export interface HummingbirdAsset {
   startTime: bigint;
   expTime: bigint;
   timeGranularity: bigint;
-  timeMinDuration: bigint;
-  minBandwidth: bigint;
+  timeMinDuration: number;
+  timeMaxDuration: number;
+  minBandwidth: number;
+  maxBandwidth: number;
   issuer: string;
 }
 
-/**
- * Parse a HummingbirdAsset from its flat GraphQL JSON fields.
- * Works both for a top-level HummingbirdAsset object and for the nested
- * `asset` field of an AssetListing.
- */
 export function parseHummingbirdAssetFields(fields: Record<string, unknown>): HummingbirdAsset {
   return {
     id: fields['id'] as string,
@@ -33,16 +29,14 @@ export function parseHummingbirdAssetFields(fields: Record<string, unknown>): Hu
     startTime: BigInt(fields['start_time'] as string),
     expTime: BigInt(fields['exp_time'] as string),
     timeGranularity: BigInt(fields['time_granularity'] as string),
-    timeMinDuration: BigInt(fields['time_min_duration'] as string),
-    minBandwidth: BigInt(fields['min_bandwidth'] as string),
+    timeMinDuration: Number(fields['time_min_duration'] as string),
+    timeMaxDuration: Number(fields['time_max_duration'] as string),
+    minBandwidth: Number(fields['bandwidth_min'] as string),
+    maxBandwidth: Number(fields['bandwidth_max'] as string),
     issuer: fields['issuer'] as string,
   };
 }
 
-/**
- * Extract a HummingbirdAsset from a getObject/listOwnedObjects result
- * (fetched with `include: { json: true }`).
- */
 export function getHummingbirdAsset(obj: { object: { json: Record<string, unknown> | null } }): HummingbirdAsset {
   return parseHummingbirdAssetFields(getObjectFields(obj));
 }
