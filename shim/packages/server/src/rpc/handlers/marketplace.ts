@@ -215,6 +215,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         result,
         getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
       );
+      
       return new PublishAssetResponse({ assetId: suiHexToBytes(created) });
     }catch(error){
       console.log(error);
@@ -251,7 +252,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const asRegistryId = deriveObjectID(
             state.globalRegistryId,
             'u64',
-            bcs.U64.serialize(BigInt(isdAsId)).toBytes(),
+            bcs.U64.serialize(isdAsId).toBytes(),
           );
           
           if (_req.ifIdIngress || _req.ifIdEgress) {
@@ -310,6 +311,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
     async buyAssets(req, _ctx) {
       try {
+        // TODO find a way to obtain isdAsId without needing to query 
 
         // Fetch all listing objects and wallet balance in parallel.
         const [listingResults, balanceResult] = await Promise.all([
@@ -317,26 +319,56 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             const listingId = bytesToSuiHex(asset.assetId);
             return state.client.getObject({ objectId: listingId, include: { json: true } });
           })),
-          state.client.getBalance({ owner: state.signer.toSuiAddress() }),
+          state.client.getBalance({ owner: state.signer.toSuiAddress(), coinType: DEFAULT_COIN_TYPE }),
         ]);
-        const totalBalance = balanceResult.balance.balance;
 
-        // Compute effective price for each asset: duration * bandwidth * unit_price.
-        // GraphQL JSON: nested structs have no `fields` wrapper; UID is a canonical address string.
-        type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; effectivePrice: bigint };
+        type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; };
         const metas: AssetMeta[] = req.assets.map((asset, i) => {
           const fields = getObjectFields(listingResults[i]!);
           const interfaceObjectId = fields['interface'] as string;
           const assetId = (fields['asset'] as Record<string, any>)['id'] as string;
           const listingId = bytesToSuiHex(asset.assetId);
-          const unitPrice = BigInt(fields['price'] as string);
-          const reqStart = BigInt(asset.startsAtExactly!.seconds);
-          const reqExp   = BigInt(asset.stopsAtExactly!.seconds);
-          const reqBw    = BigInt(asset.bandwidthExact!);
-          const effectivePrice = (reqExp - reqStart) * reqBw * unitPrice;
-          return { fields, interfaceObjectId, assetId, listingId, effectivePrice };
+          return { fields, interfaceObjectId, assetId, listingId };
         });
+        
+        var maxPrice = req.maxPrice;
+        if (BigInt(balanceResult.balance.balance) < maxPrice - BigInt(state.config.transaction.gasBudget)){
+          console.warn(`maxPrice ${maxPrice} exceeds address balance. Setting maxPrice to ${Number(balanceResult.balance.balance) - state.config.transaction.gasBudget}`)
+          maxPrice = BigInt(balanceResult.balance.balance) - BigInt(state.config.transaction.gasBudget)
+        }
+        
+        const tx = new Transaction();
+        const [ budget ] = tx.splitCoins(tx.gas, [tx.pure.u64(maxPrice)])
 
+
+        for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
+          
+          addBuyAndTake(tx, {
+            packageId: state.config.package.id,
+            interfaceObjectId: meta.interfaceObjectId,
+            listingId: bytesToSuiHex(asset.assetId),
+            startTime: BigInt(asset.startsAtExactly!.seconds),
+            expTime:   BigInt(asset.stopsAtExactly!.seconds),
+            bandwidth: BigInt(asset.bandwidthExact!),
+            coinType: DEFAULT_COIN_TYPE,
+          }, budget);
+        }
+
+        tx.mergeCoins(tx.gas, [budget]);
+        
+        const result = await executeTransaction(state.client, state.signer, tx);
+        console.log(result);
+
+        const balanceChange = result.balanceChanges?.find(c => c.address === state.signer.toSuiAddress());
+        var cost = BigInt(-Number(balanceChange?.amount ?? 0));
+        // the returned cost must fit an unsigned integer, but in some cases the storage rebate is higher than the transaction cost leading to a gain (negative cost). 
+        // In practice this should never happpen assuming assets prices are set properly, but when testing with small values this might happen 
+        cost = cost<0n?0n:cost; 
+        
+        const boughtIds = result.effects.changedObjects.filter(obj => result.objectTypes[obj.objectId]?.includes("hummingbird_asset::HummingbirdAsset"));
+        
+        const bought = boughtIds.map(m => new BoughtAsset({ assetId: suiHexToBytes(m.objectId) }));
+        return new BuyAssetsResponse({ assets: bought, cost});
       } catch (error) {
         console.log(error);
         if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
@@ -351,7 +383,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         throw error;
       }
 
-      return new BuyAssetsResponse({assets: req.assets, cost:req.maxPrice})
     },
 
     async redeemAsset(req, _ctx) {
