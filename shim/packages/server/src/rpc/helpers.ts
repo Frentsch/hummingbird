@@ -53,5 +53,5 @@ export function bytesToSuiHex(bytes: Uint8Array): string {
 }
 
 export function suiHexToBytes(hex: string): Uint8Array<ArrayBuffer> {
-  return Uint8Array.from(Buffer.from(hex.substring(1), 'hex'))
+  return Uint8Array.from(Buffer.from(hex.substring(2), 'hex'))
 }

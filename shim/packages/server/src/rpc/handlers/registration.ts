@@ -42,14 +42,17 @@ export function createRegistrationServiceImpl(
 
   return {
     async createChallenge(req) {
-      // Enrich with the shim's Sui address before forwarding to the auth-server.
-      const result = await authServerClient.createChallenge(
-        new ShimCreateChallengeRequest({ ia: req.ia, suiAddress }),
-      );
-      return new CreateChallengeResponse({
-        id: result.id,
-        value: result.value,
-      });
+      try{
+        const result = await authServerClient.createChallenge(
+          new ShimCreateChallengeRequest({ ia: req.ia, suiAddress }),
+        );
+        return new CreateChallengeResponse({
+          id: result.id,
+          value: result.value,
+        });
+      }catch (error){
+        throw new ConnectError(`Failed to reach Auth Server ${error}. Make sure to start the auth server`, Code.Unavailable)
+      }
     },
 
     async registerAS(req, ctx) {
@@ -58,27 +61,28 @@ export function createRegistrationServiceImpl(
         throw new ConnectError('signed_challenge is required', Code.InvalidArgument);
       }
 
-      // Forward the SignedMessage and the HTTP authority the AS used when signing.
-      // The SCION client includes authority as associated data in the ECDSA signature,
-      // so the auth-server needs it to reproduce the signed digest.
-      const result = await authServerClient.registerAS(
-        new ShimRegisterASRequest({
-          id: req.id,
-          signedChallenge: sm,
-          authority: extractAuthority(ctx),
-        }),
-      );
+      try{
+        const result = await authServerClient.registerAS(
+          new ShimRegisterASRequest({
+            id: req.id,
+            signedChallenge: sm,
+            authority: extractAuthority(ctx),
+          }),
+        );
 
-      const asAuthCapId = result.authCapId;
-      if(asAuthCapId != ""){
-        state.asAuthCapId = asAuthCapId;
-        state.config.as.asAuthCapId = asAuthCapId;
-        state.config.as.isdAsId = u64ToIsdAsId(result.isdAsId);
-        state.config.as.asRegistryId = deriveObjectID(state.config.package.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
-        await saveConfig(state.config);
+        const asAuthCapId = result.authCapId;
+        if(asAuthCapId != ""){
+          state.asAuthCapId = asAuthCapId;
+          state.config.as.asAuthCapId = asAuthCapId;
+          state.config.as.isdAsId = u64ToIsdAsId(result.isdAsId);
+          state.config.as.asRegistryId = deriveObjectID(state.config.package.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
+          await saveConfig(state.config);
+        }
+
+        return new RegisterASResponse({ jwtPublisher: 'dummy-token', jwtRedemption: 'dummy-token' });
+      }catch(error) {
+        throw new ConnectError(`Failed to reach Auth Server ${error}. Make sure to start the auth server`, Code.Unavailable)
       }
-
-      return new RegisterASResponse({ jwtPublisher: 'dummy-token', jwtRedemption: 'dummy-token' });
     },
   };
 }

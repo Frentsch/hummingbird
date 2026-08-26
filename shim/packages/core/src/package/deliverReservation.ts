@@ -30,7 +30,7 @@ export function buildDeliverReservation(params: DeliverReservationParams): Trans
       tx.pure.vector('u8', Array.from(params.encryptedReservation)),
       tx.pure.u64(params.resId),
       tx.pure.u64(params.bwRounded),
-      tx.pure.u16(params.bwDataplaneEncoding),
+      tx.pure.u32(params.bwDataplaneEncoding),
     ],
   });
   return tx;
