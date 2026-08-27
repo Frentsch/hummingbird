@@ -544,30 +544,25 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if (req.assetIds.length <= 2) {
         throw new ConnectError("must specify at least 2 assets to combine")
       }
-      const assetId1 = bytesToSuiHex(req.assetIds[0]!);
-      const assetId2 = bytesToSuiHex(req.assetIds[1]!);
-
-      const [obj1, obj2] = await Promise.all([
-        state.client.getObject({ objectId: assetId1, include: { json: true } }),
-        state.client.getObject({ objectId: assetId2, include: { json: true } }),
-      ]);
-
-      const asset1 = getHummingbirdAsset(obj1);
-      const asset2 = getHummingbirdAsset(obj2);
-      const fuseFunction = asset1.bandwidth === asset2.bandwidth ? 'fuse_time' : 'fuse_bandwidth';
+      const mergeAssetId = bytesToSuiHex(req.assetIds[0]!);
 
       const gasBudget = BigInt(state.config.transaction.gasBudget);
       const tx = new Transaction();
       tx.setGasBudget(gasBudget);
+      for(const assetId of req.assetIds.slice(1)){
+        tx.moveCall({
+          target: `${state.config.package.id}::hummingbird_asset::fuse_assets`,
+          arguments: [tx.object(mergeAssetId), tx.object(bytesToSuiHex(assetId))],
+        });
+      }
+      try {
+        await executeTransaction(state.client, state.signer, tx);
 
-      tx.moveCall({
-        target: `${state.config.package.id}::hummingbird_asset::${fuseFunction}`,
-        arguments: [tx.object(assetId1), tx.object(assetId2)],
-      });
-
-      await executeTransaction(state.client, state.signer, tx);
-
-      return new CombineAssetResponse({ assetId: Uint8Array.from(req.assetIds) });
+        return new CombineAssetResponse({ assetId: suiHexToBytes(mergeAssetId) });
+      }catch (error) {
+        console.log(error);
+        throw new ConnectError(`${error}`, Code.Internal)
+      }
     },
   };
 }

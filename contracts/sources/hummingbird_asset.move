@@ -252,6 +252,17 @@ module hummingbird::hummingbird_asset {
         first.bandwidth_max = u32::min(first.bandwidth_max, smax);
     }
 
+    public fun fuse_assets(first: &mut HummingbirdAsset, second: HummingbirdAsset) {
+        assert!(is_same_interface(first, &second), EWrongInterfaceFuse);
+        assert!(are_consecutive(first, &second) || are_overlapping(first, &second), EAssetError);
+        
+        if(are_consecutive(first,  &second)){
+            fuse_time(first, second)
+        }else{
+            fuse_bandwidth(first, second)
+        }
+    }
+
     // --- Redeem flow ---
 
     /// Buyer sends ingress + egress pair to the AS for data-plane key exchange.
