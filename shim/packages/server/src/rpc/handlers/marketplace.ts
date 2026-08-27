@@ -19,9 +19,8 @@ import {
   UpdateAssetsResponse,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
-import { Transaction, type TransactionResult } from '@mysten/sui/transactions';
-import { deriveObjectID, SUI_DECIMALS } from '@mysten/sui/utils';
-import { bcs } from '@mysten/sui/bcs';
+import { Transaction } from '@mysten/sui/transactions';
+import { SUI_DECIMALS } from '@mysten/sui/utils';
 import { SimulationError } from '@mysten/sui/client';
 import {
   buildCreateListing,
@@ -31,7 +30,6 @@ import {
   executeTransaction,
   getObjectType,
   extractCreatedObjectId,
-  listingInterfaceId,
   getObjectFields,
   getAllListingsOf,
   getAllInterfacesOf,
@@ -40,8 +38,6 @@ import {
   insertReservation,
   queryReservations,
   buildCreateInterface,
-  buildRegisterSeller,
-  saveConfig,
   isdAsIdToU64,
   buildRedeemPair,
   getHummingbirdAsset,
@@ -51,14 +47,8 @@ import {
 } from '@sui-shim/core';
 import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
-import { BigIntToUID, bytesToSuiHex, ListingToQueryAsset, suiHexToBytes, SuiToRpcAsset } from '../helpers.js';
-import { assert } from 'node:console';
-import { requestHeaderWithCompression } from '@connectrpc/connect/protocol-connect';
-import { text } from 'node:stream/consumers';
-import { bigint, config } from 'zod';
+import { bytesToSuiHex, ListingToQueryAsset, suiHexToBytes, SuiToRpcAsset } from '../helpers.js';
 import { TextEncoder } from 'node:util';
-import { _overwrite } from 'zod/v4/core';
-import { stat } from 'node:fs';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -136,6 +126,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       //create interface if not exists
       const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
       const interfaceObjectId = deriveIfIdFromAS(state.config.as.asRegistryId,ifId);
+      console.log(interfaceObjectId);
       const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
       if (interfaceResult instanceof Error) {
         try{
@@ -148,6 +139,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
               interfaceId: ifId,
             })
           );
+
+          while(!await state.client.getObject({objectId: interfaceObjectId}).then(_ => true).catch(_ => false)){
+              console.log("Newly created interface not yet registered on-chain. Wait before publishing asset...")
+          }
         }catch(error){
           console.log(error);
           if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
@@ -157,31 +152,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           }else throw error;
         }
       }
-
-      //create seller auth token if not exists
-      const sellerAuthTokenType = getObjectType(state.config.package.id, 'marketplace', 'SellerAuthToken');
-      const { objects: sellerTokens } = await state.client.listOwnedObjects({
-        owner: state.signer.getPublicKey().toSuiAddress(),
-        type: sellerAuthTokenType,
-      });
-      if (sellerTokens.length === 0) {
-        console.log("registering new seller");
-        const sellerResult = await executeTransaction(state.client, state.signer,
-          buildRegisterSeller({
-            packageId: state.config.package.id,
-            paymentAddress: state.signer.getPublicKey().toSuiAddress(),
-          })
-        );
-        const sellerAuthTokenId = extractCreatedObjectId(sellerResult, sellerAuthTokenType);
-        state.sellerAuthTokenId = sellerAuthTokenId;
-        state.config.as.sellerAuthTokenId = sellerAuthTokenId;
-        await saveConfig(state.config);
-      }
-
-      const start = asset.startsAt ? Number(asset.startsAt.seconds)  : Math.floor(Date.now() / 1000);
-      const stop = asset.stopsAt ? Number(asset.stopsAt.seconds) : start + 3600;
-
-      //TODO if a new interface obejct is created, there's a chance this throws object not found. We might need to wait a short interval before executing
+      
       const tx = buildCreateListing({
         packageId: state.packageId,
         interfaceObjectId,
@@ -191,8 +162,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         sellerAuthTokenId: state.sellerAuthTokenId,
         isdAsId: isdAsIdToU64(isdAsId),
         bandwidth: asset.bandwidth,
-        startTime: BigInt(Math.floor(start)),
-        expTime: BigInt(Math.floor(stop)),
+        startTime: asset.startsAt.seconds,
+        expTime: asset.stopsAt.seconds,
         routerOnly: false,
         timeGranularity: BigInt(asset.timeGranularity),
         timeMinDuration: BigInt(asset.timeGranularity),
@@ -204,18 +175,23 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         coinType: DEFAULT_COIN_TYPE,
       });
 
-      const result = await executeTransaction(state.client, state.signer, tx);
+        const result = await executeTransaction(state.client, state.signer, tx);
 
-      const created = extractCreatedObjectId(
-        result,
-        getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
-      );
-      
-      return new PublishAssetResponse({ assetId: suiHexToBytes(created) });
-    }catch(error){
-      console.log(error);
-      throw new ConnectError(`Failed to publish asset: ${error}`, Code.Internal);
-    }
+        const created = extractCreatedObjectId(
+          result,
+          getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
+        );
+        
+        return new PublishAssetResponse({ assetId: suiHexToBytes(created) });
+      }catch(error){
+        console.log(error);
+        if (error instanceof SimulationError && error.executionError?.$kind === 'MoveAbort') {
+            const {abortCode} = error.executionError.MoveAbort;
+            
+            if(abortCode=="2") throw new ConnectError('Unauthorized: invalid auth cap. Make sure to register first', Code.FailedPrecondition);
+          }else throw error;
+        throw new ConnectError(`Failed to publish asset: ${error}`, Code.Internal);
+      }
     },
 
     async searchAssets(_req, _ctx) {
@@ -328,7 +304,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         
         var maxPrice = req.maxPrice;
         const addressBalance = BigInt(balanceResult.balance.balance)
-        //TODO find a better gasPrice estimate
+        //TODO find a better gasPrice estimate. Also if payment is done in a currency different from SUI, subtracting the sui gas price is faulty
         const gasPrice = 50_000n * await state.client.getReferenceGasPrice().then(gp => BigInt(gp.referenceGasPrice)).catch(err => 0n);
         console.log(`available balance ${addressBalance}. Gas price ${gasPrice}`)
         if (addressBalance < maxPrice - gasPrice){

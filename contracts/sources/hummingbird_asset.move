@@ -105,11 +105,10 @@ module hummingbird::hummingbird_asset {
     ): HummingbirdAsset {
         assert!(cap_isd_as_id(cap) == isd_as_id, EUnauthorized);
         let duration = exp_time - start_time;
-        assert!(exp_time > start_time &&  time_max_duration >= duration && duration >= time_min_duration, EInvalidTimeInterval);
-        assert!(bandwidth_max >= bandwidth && bandwidth >= bandwidth_min && bandwidth_min > 0, EInvalidBandwidth);
+        assert!(exp_time > start_time &&  time_max_duration >= time_min_duration && duration >= time_min_duration, EInvalidTimeInterval);
+        assert!(bandwidth_max >= bandwidth_min && bandwidth >= bandwidth_min && bandwidth_min > 0, EInvalidBandwidth);
         assert!(
-            time_granularity > 0
-                && (exp_time - start_time) % time_granularity == 0,
+            time_granularity > 0,
             EInvalidTimeGranularity
         );
         assert!(option::is_some(&if_ingress_id) || option::is_some(&if_egress_id), EAssetError);
@@ -255,7 +254,7 @@ module hummingbird::hummingbird_asset {
     public fun fuse_assets(first: &mut HummingbirdAsset, second: HummingbirdAsset) {
         assert!(is_same_interface(first, &second), EWrongInterfaceFuse);
         assert!(are_consecutive(first, &second) || are_overlapping(first, &second), EAssetError);
-        
+
         if(are_consecutive(first,  &second)){
             fuse_time(first, second)
         }else{

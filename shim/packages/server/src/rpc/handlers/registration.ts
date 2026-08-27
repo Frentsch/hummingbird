@@ -5,7 +5,7 @@ import { AccountService } from '../gen/hummingbird/v1/account_connect.js';
 import { CreateChallengeResponse, RegisterASResponse } from '../gen/hummingbird/v1/account_pb.js';
 import { ASRegistrationService } from '../gen/hummingbird/v1/registration_connect.js';
 import { ShimCreateChallengeRequest, ShimRegisterASRequest } from '../gen/hummingbird/v1/registration_pb.js';
-import { saveConfig, u64ToIsdAsId } from '@sui-shim/core';
+import { buildRegisterSeller, executeTransaction, extractCreatedObjectId, getObjectType, saveConfig, u64ToIsdAsId } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { deriveObjectID } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
@@ -78,7 +78,27 @@ export function createRegistrationServiceImpl(
           state.config.as.asRegistryId = deriveObjectID(state.config.package.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
           await saveConfig(state.config);
         }
-
+        
+        //create seller auth token if not exists
+        const sellerAuthTokenType = getObjectType(state.config.package.id, 'marketplace', 'SellerAuthToken');
+        const { objects: sellerTokens } = await state.client.listOwnedObjects({
+          owner: state.signer.getPublicKey().toSuiAddress(),
+          type: sellerAuthTokenType,
+        });
+        if (sellerTokens.length === 0) {
+          console.log("registering new seller");
+          const sellerResult = await executeTransaction(state.client, state.signer,
+            buildRegisterSeller({
+              packageId: state.config.package.id,
+              paymentAddress: state.signer.getPublicKey().toSuiAddress(),
+            })
+          );
+          const sellerAuthTokenId = extractCreatedObjectId(sellerResult, sellerAuthTokenType);
+          state.sellerAuthTokenId = sellerAuthTokenId;
+          state.config.as.sellerAuthTokenId = sellerAuthTokenId;
+          await saveConfig(state.config);
+        }
+              
         return new RegisterASResponse({ jwtPublisher: 'dummy-token', jwtRedemption: 'dummy-token' });
       }catch(error) {
         throw new ConnectError(`Failed to reach Auth Server ${error}. Make sure to start the auth server`, Code.Unavailable)
