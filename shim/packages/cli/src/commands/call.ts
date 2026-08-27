@@ -15,7 +15,7 @@ import {
   listingInterfaceId,
   DeliveryListener,
   createSuiGrpcClient,
-  openReservationDb,
+  openDB,
   insertReservation,
   getObjectFields,
   isdAsIdToU64,

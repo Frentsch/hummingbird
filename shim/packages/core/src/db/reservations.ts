@@ -23,8 +23,8 @@ export interface ReservationFilter {
   stopsAt?: bigint;
 }
 
-export function openReservationDb(path: string): SqliteDb {
-  const db = new Database(path);
+export function ensureReservationSchema(db: SqliteDb) {
+
   db.pragma('journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS reservations (
@@ -43,7 +43,6 @@ export function openReservationDb(path: string): SqliteDb {
     CREATE INDEX IF NOT EXISTS idx_ingress ON reservations(ingress_id);
     CREATE INDEX IF NOT EXISTS idx_egress  ON reservations(egress_id);
   `);
-  return db;
 }
 
 export function insertReservation(

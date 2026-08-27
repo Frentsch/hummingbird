@@ -14,5 +14,8 @@ export type { Config } from './config.js';
 export * from './helpers.js';
 export * from './helpers/registry.js';
 export * from './types/index.js';
-export { openReservationDb, insertReservation, queryReservations } from './db/reservations.js';
+export { openDB } from './db/database.js'
+export { insertReservation, queryReservations } from './db/reservations.js';
+export { insertEventCursor, queryEventCursor } from './db/eventCursor.js';
 export type { ReservationRow, ReservationFilter, SqliteDb } from './db/reservations.js';
+export type { EventCursorRow, EventCursorFilter, } from './db/eventCursor.js';

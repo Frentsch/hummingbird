@@ -19,7 +19,7 @@ import {
   UpdateAssetsResponse,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, type TransactionResult } from '@mysten/sui/transactions';
 import { deriveObjectID, SUI_DECIMALS } from '@mysten/sui/utils';
 import { bcs } from '@mysten/sui/bcs';
 import { SimulationError } from '@mysten/sui/client';
@@ -327,9 +327,13 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         });
         
         var maxPrice = req.maxPrice;
-        if (BigInt(balanceResult.balance.balance) < maxPrice - BigInt(state.config.transaction.gasBudget)){
-          console.warn(`maxPrice ${maxPrice} exceeds address balance. Setting maxPrice to ${Number(balanceResult.balance.balance) - state.config.transaction.gasBudget}`)
-          maxPrice = BigInt(balanceResult.balance.balance) - BigInt(state.config.transaction.gasBudget)
+        const addressBalance = BigInt(balanceResult.balance.balance)
+        //TODO find a better gasPrice estimate
+        const gasPrice = 50_000n * await state.client.getReferenceGasPrice().then(gp => BigInt(gp.referenceGasPrice)).catch(err => 0n);
+        console.log(`available balance ${addressBalance}. Gas price ${gasPrice}`)
+        if (addressBalance < maxPrice - gasPrice){
+          console.warn(`maxPrice ${maxPrice} exceeds address balance. Setting maxPrice to ${addressBalance - gasPrice}`)
+          maxPrice = addressBalance - gasPrice
         }
         
         const tx = new Transaction();
@@ -391,7 +395,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         const interfacePairId = req.interfaces.value;
         console.log(interfacePairId);
         if(!interfacePairId) throw new ConnectError("Must specify if_pair_asset_id", Code.InvalidArgument);
-        //TODO add a conversion helper function
         const interfacePairAssetId = bytesToSuiHex(interfacePairId);
         const asset = await state.client.getObject({objectId: interfacePairAssetId, include: {json: true}});
         const pairAsset = getHummingbirdAsset(asset);
@@ -435,8 +438,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             state.packageId,
             state.config.redemption.timeoutSecs * 1000,
           );
-
-          console.log(`executing redemption`)
+          // The delivery listener needs a moment to start, but the reservation could already arrive before that which would lead to us missing the reservation. 
+          // To avoid this we wait a moment to allow for the delivery listener to start up. TODO: wait only until the listener is started and not longer.
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          
           const result = await executeTransaction(state.client, state.signer, tx);
           /*
           const redeemRequestObjectId = extractCreatedObjectId(
@@ -500,7 +505,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
     },
 
     async splitAsset(req, _ctx) {
-      //TODO allow for repeated splits
       if (req.splitOption.case === undefined) {
         throw new ConnectError('splitOption is required', Code.InvalidArgument);
       }
@@ -510,23 +514,30 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       tx.setGasBudget(gasBudget);
 
       const assetId = bytesToSuiHex(req.assetId);
-      const newAsset = req.splitOption.case === 'timeSplit'
+      for(var idx = 0; idx < req.splitOption.value.splits.length; idx++){
+        console.log(req.splitOption.value.splits[idx])
+        const newAsset = req.splitOption.case === 'timeSplit'
         ? tx.moveCall({
             target: `${state.config.package.id}::hummingbird_asset::split_time`,
-            arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.splits[0]?.seconds??0))],
+            arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.splits[idx]?.seconds??0))],
           })
         : tx.moveCall({
             target: `${state.config.package.id}::hummingbird_asset::split_bandwidth`,
-            arguments: [tx.object(assetId), tx.pure.u64(req.splitOption.value.splits[0]??0)],
+            arguments: [tx.object(assetId), tx.pure.u32(req.splitOption.value.splits[idx]??0)],
           });
+        tx.transferObjects([newAsset], tx.pure.address(state.signer.toSuiAddress()));
+      }
+      
+      try {
+        const result = await executeTransaction(state.client, state.signer, tx);
+        console.log(result);
+        const newAssetIds = result.effects.changedObjects.filter(c => c.idOperation === 'Created').map(obj => suiHexToBytes(obj.objectId ?? '0x0'));
 
-      tx.transferObjects([newAsset], tx.pure.address(state.signer.toSuiAddress()));
-
-      const result = await executeTransaction(state.client, state.signer, tx);
-      const newAssetId = result.effects.changedObjects.find(c => c.idOperation === 'Created')?.objectId ?? '0x0';
-
-      //TODO return correct new ids
-      return new SplitAssetResponse({ assetIds: [req.assetId, suiHexToBytes(newAssetId)] });
+        return new SplitAssetResponse({ assetIds: [... newAssetIds, req.assetId] });
+      }catch (error){
+        console.log(error)
+        throw new ConnectError(`${error}`, Code.Internal)
+      }
     },
 
     async combineAssets(req, _ctx) {

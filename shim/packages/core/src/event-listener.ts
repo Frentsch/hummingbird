@@ -5,17 +5,13 @@ import type { SuiGrpcClient } from './sui-client.js';
 export interface RedeemEvent {
   txDigest: string;
   eventSeq: string;
-  /** Low 8 bytes of the RedeemRequest object ID as uint64, for proto correlation. */
   requestId: bigint;
-  /** Full hex object ID of the RedeemRequest, for DeliveryListener correlation. */
   requestObjectId: string;
-  /** interface_id of the ingress HummingbirdAsset as hex string. */
   ingressAssetId: string;
-  /** interface_id of the egress HummingbirdAsset as hex string. */
   egressAssetId: string;
   publicKey: Uint8Array;
   buyer: string;
-  bandwidth: bigint;
+  bandwidth: number;
   startTime: bigint;
   expTime: bigint;
 }
@@ -188,12 +184,8 @@ export class EventListener {
       return;
     }
 
-    // In the GraphQL JSON representation, nested structs have no `fields` wrapper.
-    // UID values are canonical address strings (not { id: { id: "0x..." } }).
-    console.log(json);
     const assetFields = json['ingress_egress_asset'] as Record<string, unknown>;
 
-    // public_key is vector<u8>, serialized as a Base64 string in GraphQL JSON.
     const pkRaw = json['public_key'];
     const publicKey = typeof pkRaw === 'string'
       ? Uint8Array.from(Buffer.from(pkRaw, 'base64'))
@@ -212,7 +204,7 @@ export class EventListener {
       egressAssetId:  Number(assetFields['if_egress_id']).toString(16),
       publicKey,
       buyer: json['buyer'] as string,
-      bandwidth: BigInt(assetFields['bandwidth'] as string),
+      bandwidth: Number(assetFields['bandwidth'] as string),
       startTime: BigInt(assetFields['start_time'] as string),
       expTime:   BigInt(assetFields['exp_time']   as string),
     });
@@ -223,14 +215,14 @@ export class EventListener {
   async #mainLoop(): Promise<void> {
     let backoff = RECONNECT_INITIAL_MS;
     while (!this.#stopped) {
-      // Phase 1: catch up on missed events since last cursor
+      // catch up on missed events since last cursor
       try {
         await this.#catchUp();
       } catch (err) {
         console.error('[EventListener] catch-up error:', err);
       }
 
-      // Phase 2: stream new events in real time
+      // stream new events in real time
       try {
         console.log('[EventListener] Connecting to gRPC subscription');
         await this.#subscribe();

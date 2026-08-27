@@ -9,14 +9,14 @@ path = "/home/frentsch/.sui/sui_config/sui.keystore"
 port = 9091
 
 [package]
-id = "0xc1d56513910b4183e7c08b63ba0969caf2261a89c212fcc2244f21c6f152006c"
-globalRegistryId = "0xd7298913957750f6d96eaac823882b6dbcafc1ea13cb1861c1f61074fb4c2e61"
+id = "0x599f06ac73f79105c28c5e08403d3f201dba13e45ef3582eb2c299a8677ba702"
+globalRegistryId = "0xe5376287c8c20740c4123c48e197032599e40d29232ae7eb6ad6f4979535534c"
 
 [as]
 isdAsId = "1-ff00:0:111"
-asRegistryId = "0xa678287ec81b3c38a1aa8952f7a943bc01b7bb217d6d32cfdd36edb95f68f4e7"
-asAuthCapId = "0x36cf3632989533a9bd88e2fa405c35a63aa5b98e6d5bc92ddd3705c4849f631a"
-sellerAuthTokenId = "0xca41789f4e8901540a05cec68aa0deadc4ab48855c60c7e743fd62dceb4cf025"
+asRegistryId = "0xd5e4591d2f7666ecf0802ee2d65c7bcad446c8424cd144913983ea0380f238d3"
+asAuthCapId = "0x41f04721a00775bb81794372343a0dd98eb7b47b5ab82015b0b7d61062541685"
+sellerAuthTokenId = "0x7f3676baa91e7f2c8fb6b6cadd1e383a3d8bbded682518c224bff92164cba0de"
 interfaces = [ "0x66cfd8708c083f60407b74f824239e28ebafbdaf14ad01faf95c27ee2b85fd17", "0x765c68d5c4ed4b3d882c231c17185677fa503fcc804dccf4db12ad09090fea96" ]
 
 [redemption]

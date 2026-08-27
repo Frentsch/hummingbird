@@ -10,7 +10,7 @@ import {
   EventListener,
   DeliveryListener,
   loadConfig,
-  openReservationDb,
+  openDB,
   loadOrCreateAuthKeypair,
 } from '@sui-shim/core';
 import type { RedeemEvent } from '@sui-shim/core';
@@ -18,7 +18,6 @@ import type { AppState } from './state.js';
 import { createRpcRoutes } from './rpc/handler.js';
 import { pushRedeemRequest } from './rpc/handlers/redemption.js';
 import { RedeemAssetFromASRequest } from './rpc/gen/hummingbird/v1/redemption_pb.js';
-import { authInterceptor } from './rpc/auth-interceptor.js';
 import { Timestamp } from '@bufbuild/protobuf';
 
 export async function startServer(configPath: string): Promise<void> {
@@ -30,7 +29,7 @@ export async function startServer(configPath: string): Promise<void> {
 
   const grpcClient = createSuiGrpcClient(config.network.name, config.network.grpcUrl);
   const deliveryListener = new DeliveryListener(grpcClient);
-  const db = openReservationDb(config.db.path);
+  const db = openDB(config.db.path);
   
   const authKeypair = await loadOrCreateAuthKeypair(config.crypto.authKeyPath);
 
@@ -57,10 +56,10 @@ export async function startServer(configPath: string): Promise<void> {
     const req = new RedeemAssetFromASRequest({
       ingressId: parseInt(ev.ingressAssetId, 16),
       egressId: parseInt(ev.egressAssetId, 16),
-      bw: ev.bandwidth,
+      bandwidth: ev.bandwidth,
       startsAt: new Timestamp({ seconds: ev.startTime }),
       stopsAt: new Timestamp({ seconds: ev.expTime }),
-      requestId: ev.requestId.toString(),
+      requestId: BigInt(ev.requestId.toString()),
     });
     state.pendingRedemptions.set(ev.requestId, {
       requestObjectId: ev.requestObjectId,
@@ -82,7 +81,6 @@ export async function startServer(configPath: string): Promise<void> {
       }
     },
     acceptCompression: [compressionGzip],
-    interceptors: [authInterceptor],
   });
   
   // HTTP/1.1 and HTTP/2 share the same port via a protocol-sniffing TCP multiplexer.

@@ -23,7 +23,7 @@ const ReservationDeliveredBCS = bcs.struct('ReservationDelivered', {
   encrypted_reservation: bcs.vector(bcs.u8()),
   res_id: bcs.u64(),
   bw_rounded: bcs.u64(),
-  bw_dataplane_encoding: bcs.u16(),
+  bw_dataplane_encoding: bcs.u32(),
 });
 
 
@@ -34,11 +34,6 @@ export class DeliveryListener {
     this.#grpc = grpcClient;
   }
 
-  /**
-   * Watch checkpoints until a ReservationDelivered event appears in a transaction
-   * with a matching redeem_request_id.
-   * Rejects with DeliveryTimeoutError on timeout.
-   */
   async waitForDelivery(
     publicKey: Uint8Array,
     packageId: string,
@@ -55,11 +50,10 @@ export class DeliveryListener {
       }, timeoutMs);
 
       const stream = this.#grpc.subscriptionService.subscribeCheckpoints(
-        // Include both events and effects so we can check object deletions
         { readMask: { paths: ['transactions.events', 'transactions.effects'] } },
         { abort: abortController.signal },
       );
-
+      console.log("delivery listener started");
       (async () => {
         try {
           for await (const response of stream.responses) {
@@ -67,10 +61,8 @@ export class DeliveryListener {
             if (!checkpoint) continue;
             for (const tx of checkpoint.transactions) {
               for (const event of tx.events?.events ?? []) {
-              //console.log(event.eventType);
                 if (event.eventType !== deliveryEventType) continue;
                 if (!event.contents?.value) continue;
-                console.log("received delivery")
 
                 let decoded: { redeem_request_id: string; encrypted_reservation: number[]; public_key: number[]; res_id: string, bw_rounded: string; bw_dataplane_encoding: number };
                 try {
@@ -81,9 +73,10 @@ export class DeliveryListener {
                   console.error('[DeliveryListener] BCS decode error:', err);
                   continue;
                 }
-                console.log(decoded);
                 
                 //TODO add some additional identifier to avoid two concurrent redemptions to get mismatched
+                //The issue is that the listener should be started before the transaction is executed, 
+                // but we need to execute the transaction in order to get the reservation object id
                 if (!(publicKey.length == decoded.public_key.length && publicKey.every((value,index) => value === decoded.public_key[index]))){
                   console.log(`mismatched publickey ${decoded.public_key} and ${publicKey}`)
                   continue;

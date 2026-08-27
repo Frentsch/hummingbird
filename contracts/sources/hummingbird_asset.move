@@ -151,7 +151,7 @@ module hummingbird::hummingbird_asset {
 
     // --- Split ---
 
-    /// Original keeps [start_time, split_time); returned asset covers [split_time, exp_time).
+    /// Returned split contains [start_time, split_time); original maintains rest [split_time, exp_time).
     public fun split_time(
         a: &mut HummingbirdAsset,
         split_time: u64,
@@ -159,21 +159,17 @@ module hummingbird::hummingbird_asset {
     ): HummingbirdAsset {
         assert!(
             split_time > a.start_time
-                && split_time < a.exp_time
-                && (split_time - a.start_time) % a.time_granularity == 0,
+                && split_time < a.exp_time,
             EInvalidTimeInterval
         );
-        assert!(split_time - a.start_time >= a.time_min_duration 
-                && a.exp_time - split_time >= a.time_min_duration, 
-                EInvalidTimeInterval);
         let right = HummingbirdAsset {
             id: object::new(ctx),
             isd_as_id: a.isd_as_id,
             if_ingress_id: a.if_ingress_id,
             if_egress_id: a.if_egress_id,
             bandwidth: a.bandwidth,
-            start_time: split_time,
-            exp_time: a.exp_time,
+            start_time: a.start_time,
+            exp_time: split_time,
             router_only: a.router_only,
             time_granularity: a.time_granularity,
             time_min_duration: a.time_min_duration,
@@ -182,11 +178,11 @@ module hummingbird::hummingbird_asset {
             bandwidth_max: a.bandwidth_max,
             issuer: a.issuer,
         };
-        a.exp_time = split_time;
+        a.start_time = split_time;
         right
     }
 
-    /// Original keeps [0, split_bw]; returned asset covers (split_bw, B].
+    /// Returned asset covers [0, split_bw]; original asset keeps remainder (split_bw, B].
     public fun split_bandwidth(
         a: &mut HummingbirdAsset,
         split_bw: u32,
@@ -194,8 +190,7 @@ module hummingbird::hummingbird_asset {
     ): HummingbirdAsset {
         assert!(
             split_bw < a.bandwidth
-                && split_bw >= a.bandwidth_min
-                && a.bandwidth - split_bw >= a.bandwidth_min,
+                && split_bw > 0,
             EInvalidBandwidth
         );
         let upper = HummingbirdAsset {
@@ -203,7 +198,7 @@ module hummingbird::hummingbird_asset {
             isd_as_id: a.isd_as_id,
             if_ingress_id: a.if_ingress_id,
             if_egress_id: a.if_egress_id,
-            bandwidth: a.bandwidth - split_bw,
+            bandwidth: split_bw,
             start_time: a.start_time,
             exp_time: a.exp_time,
             router_only: a.router_only,
@@ -214,15 +209,15 @@ module hummingbird::hummingbird_asset {
             bandwidth_max: a.bandwidth_max,
             issuer: a.issuer,
         };
-        a.bandwidth = split_bw;
+        a.bandwidth = a.bandwidth - split_bw;
         upper
     }
 
-    /// Fuse two assets in time (contiguous or overlapping windows, same interface).
+    /// Fuse two assets in time (contiguous windows, same interface).
     public fun fuse_time(first: &mut HummingbirdAsset, second: HummingbirdAsset) {
         assert!(is_same_interface(first, &second), EWrongInterfaceFuse);
         assert!(
-            are_overlapping(first, &second) || are_consecutive(first, &second),
+            are_consecutive(first, &second),
             ENonOverlappingAssets
         );
 
@@ -240,7 +235,7 @@ module hummingbird::hummingbird_asset {
         first.bandwidth_max = u32::min(first.bandwidth_max, smax )
     }
 
-    /// Fuse two assets in bandwidth (overlapping time windows, same interface).
+    /// Fuse two assets in bandwidth (identical time windows, same interface).
     public fun fuse_bandwidth(first: &mut HummingbirdAsset, second: HummingbirdAsset) {
         assert!(is_same_interface(first, &second), EWrongInterfaceFuse);
         assert!(are_overlapping(first, &second), ENonOverlappingAssets);
@@ -366,7 +361,7 @@ module hummingbird::hummingbird_asset {
     }
 
     fun are_overlapping(a: &HummingbirdAsset, b: &HummingbirdAsset): bool {
-        a.exp_time > b.start_time && a.start_time < b.exp_time
+        a.start_time == b.start_time && a.exp_time == b.exp_time
     }
 
     fun are_consecutive(a: &HummingbirdAsset, b: &HummingbirdAsset): bool {

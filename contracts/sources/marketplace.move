@@ -119,9 +119,9 @@ module hummingbird::marketplace {
         listing = extract_by_time(interface, listing, start_time, exp_time, ctx);
 
         if (bandwidth != hummingbird_asset::get_bandwidth(&listing.asset)) {
-            let upper = split_listing_bandwidth(&mut listing, bandwidth, ctx);
-            //add_child_listing(interface, upper);
-            interface.interface_listings().add(object::id(&upper), upper);
+            let kept = split_listing_bandwidth(&mut listing, bandwidth, ctx);
+            interface.interface_listings().add(object::id(&listing), listing);
+            listing = kept;
         };
 
         let asset = execute_payment(listing, payment, ctx);
@@ -199,11 +199,11 @@ module hummingbird::marketplace {
                 && (split_time - old_start) % hummingbird_asset::get_time_granularity(&listing.asset) == 0,
             EInvalidInterval
         );
-        let right_asset = hummingbird_asset::split_time(&mut listing.asset, split_time, ctx);
+        let left_asset = hummingbird_asset::split_time(&mut listing.asset, split_time, ctx);
         AssetListing<COIN> {
             id: object::new(ctx),
             interface: listing.interface,
-            asset: right_asset,
+            asset: left_asset,
             price: listing.price,
             seller: listing.seller,
         }
@@ -224,11 +224,11 @@ module hummingbird::marketplace {
                 && old_bw - split_bw >= min_bw,
             EInvalidBandwidth
         );
-        let upper_asset = hummingbird_asset::split_bandwidth(&mut listing.asset, split_bw, ctx);
+        let lower_asset = hummingbird_asset::split_bandwidth(&mut listing.asset, split_bw, ctx);
         AssetListing<COIN> {
             id: object::new(ctx),
             interface: listing.interface,
-            asset: upper_asset,
+            asset: lower_asset,
             price: listing.price,
             seller: listing.seller,
         }
@@ -250,19 +250,15 @@ module hummingbird::marketplace {
             EInvalidInterval
         );
 
-        // Split right boundary first so the asset shrinks to [old_start, exp_time].
         if (exp_time < old_exp) {
-            let right = split_listing_time(&mut listing, exp_time, ctx);
-            //add_child_listing(interface, right);
-            interface.interface_listings().add(object::id(&right), right);
+            let kept = split_listing_time(&mut listing, exp_time, ctx);
+            interface.interface_listings().add(object::id(&listing), listing);
+            listing = kept;
         };
 
-        // Split left boundary: listing becomes left slice; new_right is [start_time, exp_time].
         if (start_time > old_start) {
-            let new_right = split_listing_time(&mut listing, start_time, ctx);
-            //add_child_listing(interface, listing);
-            interface.interface_listings().add(object::id(&listing),listing);
-            listing = new_right;
+            let leftover = split_listing_time(&mut listing, start_time, ctx);
+            interface.interface_listings().add(object::id(&leftover), leftover);
         };
 
         listing
@@ -271,7 +267,7 @@ module hummingbird::marketplace {
     /// Destroy the listing wrapper, pay the seller, return the asset and coin change.
     fun execute_payment<COIN>(
         listing: AssetListing<COIN>,
-        mut payment: &mut Coin<COIN>,
+        payment: &mut Coin<COIN>,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
         let AssetListing<COIN> {

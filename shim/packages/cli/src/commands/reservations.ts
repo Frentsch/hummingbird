@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { loadConfig, openReservationDb, queryReservations } from '@sui-shim/core';
+import { loadConfig, openDB, queryReservations } from '@sui-shim/core';
 import type { ReservationFilter } from '@sui-shim/core';
 
 export function createReservationsCommand(): Command {
@@ -25,7 +25,7 @@ export function createReservationsCommand(): Command {
         stopsAt?: string;
       }) => {
         const config = await loadConfig(opts.config);
-        const db = openReservationDb(config.db.path);
+        const db = openDB(config.db.path);
 
         const filter: ReservationFilter = {};
         if (opts.ia        !== undefined) filter.ia        = opts.ia;
