@@ -93,15 +93,6 @@ module hummingbird::marketplace {
         listing_id
     }
 
-    public entry fun create_listing_entry<COIN>(
-        interface: &mut Interface,
-        asset: HummingbirdAsset,
-        price: u64,
-        seller_token: &SellerAuthToken,
-        ctx: &mut TxContext,
-    ) {
-        create_listing<COIN>(interface, asset, price, seller_token, ctx);
-    }
 
     // --- Buy ---
 

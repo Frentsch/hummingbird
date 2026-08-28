@@ -17,6 +17,8 @@ import {
   Reservation,
   PricingStrategy,
   UpdateAssetsResponse,
+  UpdateAssetResult,
+  PublisherAsset,
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
 import { Transaction } from '@mysten/sui/transactions';
@@ -45,10 +47,11 @@ import {
   deriveIfIdFromAS,
   deriveRegistryId,
 } from '@sui-shim/core';
-import type { ReservationFilter, ReservationRow } from '@sui-shim/core';
+import type { ReservationFilter, ReservationRow, TxResult } from '@sui-shim/core';
 import type { AppState } from '../../state.js';
 import { bytesToSuiHex, ListingToQueryAsset, suiHexToBytes, SuiToRpcAsset } from '../helpers.js';
 import { TextEncoder } from 'node:util';
+import { buildDelistAndDestroy } from '../../../../core/src/package/delistAndTake.js';
 
 const API_MAJOR_VERSION = 0;
 const API_MINOR_VERSION = 1;
@@ -78,40 +81,8 @@ function filterReservation(r: Reservation, req: FetchReservationsRequest): boole
   return true;
 }
 
-
-
-export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceImpl<typeof IMarketplaceService>> {
-  return {
-    info(_req, _ctx) {
-      console.log("info request");
-      return new MarketplaceInfoResponse({
-        apiMajorVersion: API_MAJOR_VERSION,
-        apiMinorVersion: API_MINOR_VERSION,
-        currency: DEFAULT_COIN_TYPE,
-        currencyExponent: SUI_DECIMALS,
-        maxStatisticsGranularity: 1,
-        pricingStrategy: PricingStrategy.static_pricing,
-        transactionFeeAbsolute: 0n,
-        transactionFeeRelative: 0,
-        splitCombineFeeAbsolute: 0n,
-        supportsRedemptionDelegation: false,
-        delegationHourlyFee: 0n,
-      });
-    },
-
-    async updateAssets(req, _ctx) {
-      const assetUpdates = req.assets; 
-      for(const update of assetUpdates){
-        const id = bytesToSuiHex(update.assetId)
-        console.log(id)
-      }
-      return new UpdateAssetsResponse()
-    },
-
-    async publishAsset(req, _ctx) {
-      const asset = req.asset;
-      if(!asset) throw new ConnectError("Must specify Asset", Code.FailedPrecondition);
-      if(!state.config.as.isdAsId || !state.config.as.asRegistryId || !state.config.as.asAuthCapId) throw new ConnectError('AS not registered.', Code.Unauthenticated);
+async function publishAsset(state: AppState, tx: Transaction, asset: PublisherAsset) : Promise<TxResult> {
+  if(!state.config.as.isdAsId || !state.config.as.asRegistryId || !state.config.as.asAuthCapId) throw new ConnectError('AS not registered.', Code.Unauthenticated);
       
       if(!state.config.package.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
       if (asset.ifIdIngress === undefined && asset.ifIdEgress === undefined) {
@@ -122,11 +93,11 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       if(asset.bandwidthMin>asset.bandwidth) throw new ConnectError('Min bandwidth may not exceed bandwidth', Code.FailedPrecondition);
       if(asset.timeMinDuration>asset.stopsAt.seconds-asset.startsAt.seconds) throw new ConnectError('Min time duration must be at most the total duration', Code.FailedPrecondition);
       const isdAsId = state.config.as.isdAsId;
-      try{
+
       //create interface if not exists
       const ifId = asset.ifIdIngress ?? asset.ifIdEgress!;
       const interfaceObjectId = deriveIfIdFromAS(state.config.as.asRegistryId,ifId);
-      console.log(interfaceObjectId);
+
       const { objects: [interfaceResult] } = await state.client.getObjects({ objectIds: [interfaceObjectId] });
       if (interfaceResult instanceof Error) {
         try{
@@ -152,8 +123,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           }else throw error;
         }
       }
-      
-      const tx = buildCreateListing({
+
+      return executeTransaction(state.client, state.signer, buildCreateListing(tx, {
         packageId: state.packageId,
         interfaceObjectId,
         ingressId: asset.ifIdIngress,
@@ -173,10 +144,101 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         price: BigInt(asset.price),
         issuer: state.signer.getPublicKey().toSuiAddress(),
         coinType: DEFAULT_COIN_TYPE,
+      }));
+    
+}
+
+
+export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceImpl<typeof IMarketplaceService>> {
+  return {
+    info(_req, _ctx) {
+      console.log("info request");
+      return new MarketplaceInfoResponse({
+        apiMajorVersion: API_MAJOR_VERSION,
+        apiMinorVersion: API_MINOR_VERSION,
+        currency: DEFAULT_COIN_TYPE,
+        currencyExponent: SUI_DECIMALS,
+        maxStatisticsGranularity: 1,
+        pricingStrategy: PricingStrategy.static_pricing,
+        transactionFeeAbsolute: 0n,
+        transactionFeeRelative: 0,
+        splitCombineFeeAbsolute: 0n,
+        supportsRedemptionDelegation: false,
+        delegationHourlyFee: 0n,
       });
+    },
 
-        const result = await executeTransaction(state.client, state.signer, tx);
+    async updateAssets(req, _ctx) {
+      const assetUpdates = req.assets; 
+      var results: UpdateAssetResult[] = []
+      const listings = await state.client.getObjects({
+        objectIds: req.assets.map(u=>bytesToSuiHex(u.assetId)),
+        include: { json: true}
+      }).catch(err => {
+        console.log(err)
+        return undefined
+      });
+      if(!listings) throw new ConnectError("Failed to fetch listings", Code.Internal);
 
+      for(const update of assetUpdates){
+        const operation = update.operation
+        const id = bytesToSuiHex(update.assetId)
+        const listing = listings.objects.find(obj => !(obj instanceof Error)  && obj.objectId == id)
+        if(!listing || listing instanceof Error) {
+          results.push({resultType: {case: "error", value: `Did not find listing ${id} on chain`}} as UpdateAssetResult)
+          continue;
+        }
+        const interfaceId = listing.json?listing.json["interface"] as string:undefined;
+       
+        if (!interfaceId){
+          console.log(listing.json);
+          results.push({resultType: {case: "error", value: `Did not find interface id of listing ${id} on chain`}} as UpdateAssetResult)
+          continue;
+        }
+        console.log(interfaceId)
+        if(operation.case === "remove"){
+          await executeTransaction(state.client, state.signer, buildDelistAndDestroy({
+            packageId: state.config.package.id,
+            interfaceObjectId: interfaceId,
+            listingId: id,
+            sellerAuthTokenId: state.config.as.sellerAuthTokenId!,
+            coinType: DEFAULT_COIN_TYPE,
+          })).then(_ => results.push({resultType: {case: "newId", value: new Uint8Array()}} as UpdateAssetResult))
+            .catch(error => results.push({resultType: {case: "error", value: `failed to complete transaction: ${error}`}} as UpdateAssetResult));
+        }else if(operation.case === "update"){
+          //update = delete and create new. We could also do an update directly on chain, 
+          // but if the interface id changes we would need to not only update the listing, 
+          // but move it to a different object bag so this is the simpler option
+          const tx = buildDelistAndDestroy({
+            packageId: state.config.package.id,
+            interfaceObjectId: interfaceId,
+            listingId: id,
+            sellerAuthTokenId: state.config.as.sellerAuthTokenId!,
+            coinType: DEFAULT_COIN_TYPE,
+          });
+          await publishAsset(state, tx, operation.value)
+            .then(result =>  {
+                const created = extractCreatedObjectId(
+                  result,
+                  getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
+                );
+                console.log(created);
+                results.push({resultType: {case: "newId", value: suiHexToBytes(created)}} as UpdateAssetResult)})
+            .catch(error => results.push({resultType: {case: "error", value: `failed to complete transaction: ${error}`}} as UpdateAssetResult));
+        }
+      }
+
+      return new UpdateAssetsResponse({
+        result: results
+      })
+    },
+
+    async publishAsset(req, _ctx) {
+      const asset = req.asset;
+      if(!asset) throw new ConnectError("Must specify Asset", Code.FailedPrecondition);
+      try{
+        const result = await publishAsset(state,new Transaction(),asset);
+  
         const created = extractCreatedObjectId(
           result,
           getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
@@ -220,22 +282,14 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         var marketListings: any[] = [];
         if (_req.ia) {
           const isdAsId = _req.ia;
-          const asRegistryId = deriveRegistryId(state.globalRegistryId, isdAsId)/*deriveObjectID(
-            state.globalRegistryId,
-            'u64',
-            bcs.U64.serialize(isdAsId).toBytes(),
-          );*/
+          const asRegistryId = deriveRegistryId(state.globalRegistryId, isdAsId)
           
           if (_req.ifIdIngress || _req.ifIdEgress) {
             console.log("Find specific Interface");
             const interfaceId = _req.ifIdIngress ?? _req.ifIdEgress;
             if (isdAsId === undefined || interfaceId === undefined) throw new ConnectError("ia and interface id must be specified", Code.InvalidArgument);
 
-            const interfaceObjId = deriveIfIdFromAS(asRegistryId, interfaceId) /*deriveObjectID(
-              asRegistryId,
-              'u32',
-              bcs.U32.serialize(interfaceId).toBytes(),
-            );*/
+            const interfaceObjId = deriveIfIdFromAS(asRegistryId, interfaceId) 
             console.log(`Interface: ${interfaceObjId}`);
 
             marketListings = await getAllListingsOf(interfaceObjId, state.client);

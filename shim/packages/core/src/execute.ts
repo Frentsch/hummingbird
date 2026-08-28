@@ -5,65 +5,62 @@ import { SuiTransactionError } from './errors.js';
 import type { SuiGraphQLClient } from './sui-client.js';
 
 export interface TxResult {
-  /** Transaction digest. */
   digest: string;
-  /** Full execution effects. */
   effects: SuiClientTypes.TransactionEffects;
-  /** Map of objectId → Move type string for all objects touched by the transaction. */
   objectTypes: Record<string, string>;
-  /** Balance changes caused by the transaction. */
   balanceChanges: SuiClientTypes.BalanceChange[];
 }
 
-/**
- * Build → sign → submit → wait for execution effects → return TxResult.
- * Throws SuiTransactionError if the chain reports a non-success status.
- */
 export async function executeTransaction(
   client: SuiGraphQLClient,
   signer: Keypair,
   tx: Transaction,
 ): Promise<TxResult> {
-  const result = await client.signAndExecuteTransaction({
-    signer,
-    transaction: tx,
-    include: {
-      effects: true,
-      balanceChanges: true,
-      objectTypes: true,
-    },
-  });
+  const attempts = 5;
+  for(var i=0;i<attempts;i++) {
+    const result = await client.signAndExecuteTransaction({
+      signer,
+      transaction: tx,
+      include: {
+        effects: true,
+        balanceChanges: true,
+        objectTypes: true,
+      },
+    });
 
-  const txn = result.$kind === 'Transaction' ? result.Transaction : result.FailedTransaction;
 
-  if (!txn.status.success) {
-    throw new SuiTransactionError(
-      `Transaction failed: ${txn.status.error?.message ?? 'unknown error'}`,
-      txn.digest,
-    );
+    const txn = result.$kind === 'Transaction' ? result.Transaction : result.FailedTransaction;
+    
+    if (!txn.status.success) {
+      console.log(`${txn.status.error.$kind}`)
+      if(i==attempts-1)
+        throw new SuiTransactionError(
+          `Transaction failed: ${txn.status.error?.message ?? 'unknown error'}`,
+          txn.digest,
+        );
+      continue;
+    }
+
+    const effects = txn.effects;
+    if (!effects) {
+      throw new SuiTransactionError(
+        'Transaction executed but no effects returned',
+        txn.digest,
+      );
+    }
+
+    return {
+      digest: txn.digest,
+      effects,
+      objectTypes: txn.objectTypes ?? {},
+      balanceChanges: txn.balanceChanges ?? [],
+    };
   }
-
-  const effects = txn.effects;
-  if (!effects) {
-    throw new SuiTransactionError(
-      'Transaction executed but no effects returned',
-      txn.digest,
-    );
-  }
-
-  return {
-    digest: txn.digest,
-    effects,
-    objectTypes: txn.objectTypes ?? {},
-    balanceChanges: txn.balanceChanges ?? [],
-  };
+  throw new SuiTransactionError(
+    'Failed to execute transaction after 5 attempts'
+  );
 }
 
-/**
- * Dry-run a transaction without submitting it to the network.
- * Useful for building and verifying a transaction before execution.
- * Returns effects from simulation; throws SuiTransactionError on simulated failure.
- */
 export async function dryRunTransaction(
   client: SuiGraphQLClient,
   signer: Keypair,

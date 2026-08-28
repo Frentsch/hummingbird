@@ -30,7 +30,6 @@ export const OPERATIONS = {
     fn: 'register_seller_to_sender',
     typeArgCount: 0,
   },
-  // An Interface object represents the per-(isd_as_id, interface_id) "interface".
   createInterface: {
     name: 'createInterface',
     module: 'registry',
@@ -41,6 +40,12 @@ export const OPERATIONS = {
     name: 'issueAsset',
     module: 'hummingbird_asset',
     fn: 'issue',
+    typeArgCount: 0,
+  },
+  destroy: {
+    name: 'destroy',
+    module: 'hummingbird_asset',
+    fn: 'destroy',
     typeArgCount: 0,
   },
   createListing: {
@@ -79,6 +84,12 @@ export const OPERATIONS = {
     fn: 'delist_and_take',
     typeArgCount: 1,
   },
+  delist: {
+    name: 'delist',
+    module: 'marketplace',
+    fn: 'delist',
+    typeArgCount: 1,
+  },
   registerAsFor: {
     name: 'registerAsFor',
     module: 'registry',
@@ -91,7 +102,6 @@ export type OperationName = keyof typeof OPERATIONS;
 
 export const OPERATION_NAMES = Object.keys(OPERATIONS) as OperationName[];
 
-/** Fully-qualified Move target string, e.g. `0xABC::module::fn`. */
 export function moveTarget(packageId: string, op: OperationName): `${string}::${string}::${string}` {
   const def = OPERATIONS[op];
   return `${packageId}::${def.module}::${def.fn}`;

@@ -22,8 +22,8 @@ export interface CreateListingParams {
   coinType: string;
 }
 
-export function buildCreateListing( params: CreateListingParams): Transaction {
-  const tx = new Transaction();
+export function buildCreateListing(tx: Transaction | undefined, params: CreateListingParams): Transaction {
+  if(!tx) tx = new Transaction();
 
   const asset = tx.moveCall({
     target: `${params.packageId}::hummingbird_asset::issue`,
