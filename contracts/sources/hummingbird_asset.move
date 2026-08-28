@@ -2,6 +2,7 @@ module hummingbird::hummingbird_asset {
     use sui::event;
     use std::{u32,u64};
     use hummingbird::registry::{AsAuthCap, cap_isd_as_id};
+    use sui::clock::{Clock};
 
 
     const EInvalidTimeInterval: u64 = 0;
@@ -10,7 +11,6 @@ module hummingbird::hummingbird_asset {
     const EAssetMismatch: u64 = 3;
     const EUnauthorized: u64 = 7;
     const EWrongInterfaceFuse: u64 = 4;
-    const EInsufficientFuseBandwidth: u64 = 5;
     const ENonOverlappingAssets: u64 = 6;
     const EAssetError: u64 = 8;
 
@@ -101,9 +101,10 @@ module hummingbird::hummingbird_asset {
         bandwidth_min: u32,
         bandwidth_max: u32,
         issuer: address,
+        clock: &Clock,
         ctx: &mut TxContext,
     ): HummingbirdAsset {
-        assert!(cap_isd_as_id(cap) == isd_as_id, EUnauthorized);
+        assert!(cap_isd_as_id(cap) == isd_as_id && cap.cap_exp() >= clock.timestamp_ms() / 1000, EUnauthorized);
         let duration = exp_time - start_time;
         assert!(exp_time > start_time &&  time_max_duration >= time_min_duration && duration >= time_min_duration, EInvalidTimeInterval);
         assert!(bandwidth_max >= bandwidth_min && bandwidth >= bandwidth_min && bandwidth_min > 0, EInvalidBandwidth);
@@ -222,7 +223,7 @@ module hummingbird::hummingbird_asset {
 
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
-            bandwidth: sbw, start_time: sst, exp_time: set, router_only: _, 
+            bandwidth: sbw, start_time: sst, exp_time: set, router_only: sro, 
             time_granularity: _, time_min_duration: _, time_max_duration: _,
             bandwidth_min: smin, bandwidth_max: smax, issuer: _,
         } = second;
@@ -231,7 +232,8 @@ module hummingbird::hummingbird_asset {
         first.exp_time   = u64::max(first.exp_time, set);
         first.bandwidth  = u32::min(first.bandwidth, sbw);
         first.bandwidth_min = u32::max(first.bandwidth_min, smin);
-        first.bandwidth_max = u32::min(first.bandwidth_max, smax )
+        first.bandwidth_max = u32::min(first.bandwidth_max, smax );
+        first.router_only = first.router_only || sro;
     }
 
     /// Fuse two assets in bandwidth (identical time windows, same interface).
@@ -240,7 +242,7 @@ module hummingbird::hummingbird_asset {
         assert!(are_overlapping(first, &second), ENonOverlappingAssets);
         let HummingbirdAsset {
             id: sid, isd_as_id: _, if_ingress_id: _, if_egress_id: _,
-            bandwidth: sbw, start_time: sst, exp_time: set, router_only: _,
+            bandwidth: sbw, start_time: sst, exp_time: set, router_only: sro,
             time_granularity: _, time_min_duration: _, time_max_duration: _, bandwidth_min: smin, bandwidth_max: smax, issuer: _,
         } = second;
         object::delete(sid);
@@ -249,6 +251,7 @@ module hummingbird::hummingbird_asset {
         first.bandwidth  = first.bandwidth + sbw;
         first.bandwidth_min = u32::max(first.bandwidth_min, smin);
         first.bandwidth_max = u32::min(first.bandwidth_max, smax);
+        first.router_only = first.router_only || sro;
     }
 
     public fun fuse_assets(first: &mut HummingbirdAsset, second: HummingbirdAsset) {

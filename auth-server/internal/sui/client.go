@@ -163,7 +163,7 @@ func (c *Client) RegisterAsFor(packageID, globalRegistryID, marketAdminCapID str
 	tx.SetGasPrice(gasPrice)
 	tx.SetGasBudget(c.gasBudget)
 	tx.SetGasPayment([]transaction.SuiObjectRef{*gasCoin})
-	exp := time.Now().Add(time.Hour * 24 * 30).Unix();
+	exp := time.Now().Add(time.Hour * 24 * 365).Unix();
 	tx.MoveCall(models.SuiAddress(packageID), "registry", "register_as_for", nil, []transaction.Argument{
 		tx.Object(capArg),
 		tx.Object(registryArg),

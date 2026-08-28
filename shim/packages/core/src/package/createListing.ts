@@ -42,6 +42,7 @@ export function buildCreateListing(tx: Transaction | undefined, params: CreateLi
       tx.pure.u32(params.minBandwidth),
       tx.pure.u32(params.maxBandwidth),
       tx.pure.address(params.issuer),
+      tx.object("0x6"), //clock
     ],
   });
 

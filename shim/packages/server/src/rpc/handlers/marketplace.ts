@@ -160,11 +160,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         currencyExponent: SUI_DECIMALS,
         maxStatisticsGranularity: 1,
         pricingStrategy: PricingStrategy.static_pricing,
-        transactionFeeAbsolute: 0n,
+        transactionFeeAbsolute: BigInt(state.config.transaction.gasBudget),
         transactionFeeRelative: 0,
-        splitCombineFeeAbsolute: 0n,
+        splitCombineFeeAbsolute: BigInt(state.config.transaction.gasBudget),
         supportsRedemptionDelegation: false,
         delegationHourlyFee: 0n,
+        assetValidityMax: 0, 
       });
     },
 

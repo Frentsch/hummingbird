@@ -166,7 +166,8 @@ module hummingbird::marketplace {
         cap: &AsAuthCap,
         clock: &Clock,
     ) {
-        assert!(registry::cap_isd_as_id(cap) == registry::interface_isd_as_id(interface) && cap.cap_exp() >= clock.timestamp_ms() / 1000, EUnauthorized);
+        assert!(registry::cap_isd_as_id(cap) == registry::interface_isd_as_id(interface), EUnauthorized);
+        assert!(cap.cap_exp() >= clock.timestamp_ms() / 1000, EAuthExpired);
         let AssetListing<COIN> {
             id, interface: _, asset, price: _, seller: _,
         } = object_bag::remove<ID, AssetListing<COIN>>(registry::interface_listings(interface), listing_id);
