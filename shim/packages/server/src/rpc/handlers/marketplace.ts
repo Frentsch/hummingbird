@@ -22,13 +22,11 @@ import {
 } from '../gen/hummingbird/v1/marketplace_pb.js';
 import { Timestamp } from '@bufbuild/protobuf';
 import { Transaction } from '@mysten/sui/transactions';
-import { SUI_DECIMALS } from '@mysten/sui/utils';
 import { SimulationError } from '@mysten/sui/client';
 import {
   buildCreateListing,
   addBuyAndTake,
   buildRedeem,
-  DEFAULT_COIN_TYPE,
   executeTransaction,
   getObjectType,
   extractCreatedObjectId,
@@ -82,9 +80,9 @@ function filterReservation(r: Reservation, req: FetchReservationsRequest): boole
 }
 
 async function publishAsset(state: AppState, tx: Transaction, asset: PublisherAsset) : Promise<TxResult> {
-  if(!state.config.as.isdAsId || !state.config.as.asRegistryId || !state.config.as.asAuthCapId) throw new ConnectError('AS not registered.', Code.Unauthenticated);
+  if(!state.config.as.isdAsId || !state.config.as.asRegistryId || !state.config.as.asAuthCapId || !state.config.as.sellerAuthTokenId) throw new ConnectError('AS not registered.', Code.Unauthenticated);
       
-      if(!state.config.package.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
+      if(!state.config.sui.globalRegistryId) throw new ConnectError('No marketplace configured. Set the globalRegistryId in the config', Code.NotFound);
       if (asset.ifIdIngress === undefined && asset.ifIdEgress === undefined) {
         throw new ConnectError('At least one of if_id_ingress or if_id_egress must be set', Code.InvalidArgument);
       }
@@ -102,9 +100,9 @@ async function publishAsset(state: AppState, tx: Transaction, asset: PublisherAs
       if (interfaceResult instanceof Error) {
         try{
           console.log(`generating new interface for ${ifId}`);
-          await executeTransaction(state.client, state.signer,
+          await executeTransaction(state.client, state.asSigner,
             buildCreateInterface({
-              packageId: state.config.package.id,
+              packageId: state.config.sui.packageId,
               asRegistryId: state.config.as.asRegistryId,
               asAuthCapId: state.config.as.asAuthCapId!,
               interfaceId: ifId,
@@ -124,13 +122,13 @@ async function publishAsset(state: AppState, tx: Transaction, asset: PublisherAs
         }
       }
 
-      return executeTransaction(state.client, state.signer, buildCreateListing(tx, {
-        packageId: state.packageId,
+      return executeTransaction(state.client, state.asSigner, buildCreateListing(tx, {
+        packageId: state.config.sui.packageId,
         interfaceObjectId,
         ingressId: asset.ifIdIngress,
         egressId: asset.ifIdEgress,
-        asAuthCapId: state.asAuthCapId,
-        sellerAuthTokenId: state.sellerAuthTokenId,
+        asAuthCapId: state.config.as.asAuthCapId,
+        sellerAuthTokenId: state.config.as.sellerAuthTokenId,
         isdAsId: isdAsIdToU64(isdAsId),
         bandwidth: asset.bandwidth,
         startTime: asset.startsAt.seconds,
@@ -142,8 +140,8 @@ async function publishAsset(state: AppState, tx: Transaction, asset: PublisherAs
         minBandwidth: asset.bandwidthMin,
         maxBandwidth: asset.bandwidthMax,
         price: BigInt(asset.price),
-        issuer: state.signer.getPublicKey().toSuiAddress(),
-        coinType: DEFAULT_COIN_TYPE,
+        issuer: state.asSigner.getPublicKey().toSuiAddress(),
+        coinType: state.config.market.coinType,
       }));
     
 }
@@ -156,13 +154,13 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       return new MarketplaceInfoResponse({
         apiMajorVersion: API_MAJOR_VERSION,
         apiMinorVersion: API_MINOR_VERSION,
-        currency: DEFAULT_COIN_TYPE,
-        currencyExponent: SUI_DECIMALS,
+        currency: state.config.market.coinType,
+        currencyExponent: state.config.market.coinExponent,
         maxStatisticsGranularity: 1,
         pricingStrategy: PricingStrategy.static_pricing,
-        transactionFeeAbsolute: BigInt(state.config.transaction.gasBudget),
+        transactionFeeAbsolute: BigInt(state.config.sui.gasBudget),
         transactionFeeRelative: 0,
-        splitCombineFeeAbsolute: BigInt(state.config.transaction.gasBudget),
+        splitCombineFeeAbsolute: BigInt(state.config.sui.gasBudget),
         supportsRedemptionDelegation: false,
         delegationHourlyFee: 0n,
         assetValidityMax: 0, 
@@ -198,12 +196,12 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         }
         console.log(interfaceId)
         if(operation.case === "remove"){
-          await executeTransaction(state.client, state.signer, buildDelistAndDestroy({
-            packageId: state.config.package.id,
+          await executeTransaction(state.client, state.asSigner, buildDelistAndDestroy({
+            packageId: state.config.sui.packageId,
             interfaceObjectId: interfaceId,
             listingId: id,
             sellerAuthTokenId: state.config.as.sellerAuthTokenId!,
-            coinType: DEFAULT_COIN_TYPE,
+            coinType: state.config.market.coinType,
           })).then(_ => results.push({resultType: {case: "newId", value: new Uint8Array()}} as UpdateAssetResult))
             .catch(error => results.push({resultType: {case: "error", value: `failed to complete transaction: ${error}`}} as UpdateAssetResult));
         }else if(operation.case === "update"){
@@ -211,17 +209,17 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           // but if the interface id changes we would need to not only update the listing, 
           // but move it to a different object bag so this is the simpler option
           const tx = buildDelistAndDestroy({
-            packageId: state.config.package.id,
+            packageId: state.config.sui.packageId,
             interfaceObjectId: interfaceId,
             listingId: id,
             sellerAuthTokenId: state.config.as.sellerAuthTokenId!,
-            coinType: DEFAULT_COIN_TYPE,
+            coinType: state.config.market.coinType,
           });
           await publishAsset(state, tx, operation.value)
             .then(result =>  {
                 const created = extractCreatedObjectId(
                   result,
-                  getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
+                  getObjectType(state.config.sui.packageId, 'marketplace', `AssetListing<${state.config.market.coinType}>`),
                 );
                 console.log(created);
                 results.push({resultType: {case: "newId", value: suiHexToBytes(created)}} as UpdateAssetResult)})
@@ -242,7 +240,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
   
         const created = extractCreatedObjectId(
           result,
-          getObjectType(state.packageId, 'marketplace', `AssetListing<${DEFAULT_COIN_TYPE}>`),
+          getObjectType(state.config.sui.packageId, 'marketplace', `AssetListing<${state.config.market.coinType}>`),
         );
         
         return new PublishAssetResponse({ assetId: suiHexToBytes(created) });
@@ -262,8 +260,8 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       var assets: SearchAsset[];
       if (_req.owned) {
         const result = await state.client.listOwnedObjects({
-          owner: state.signer.getPublicKey().toSuiAddress(),
-          type: getObjectType(state.config.package.id, "hummingbird_asset", "HummingbirdAsset"),
+          owner: state.asSigner.getPublicKey().toSuiAddress(),
+          type: getObjectType(state.config.sui.packageId, "hummingbird_asset", "HummingbirdAsset"),
           include: { json: true },
         });
 
@@ -283,7 +281,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         var marketListings: any[] = [];
         if (_req.ia) {
           const isdAsId = _req.ia;
-          const asRegistryId = deriveRegistryId(state.globalRegistryId, isdAsId)
+          const asRegistryId = deriveRegistryId(state.config.sui.globalRegistryId, isdAsId)
           
           if (_req.ifIdIngress || _req.ifIdEgress) {
             console.log("Find specific Interface");
@@ -293,7 +291,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             const interfaceObjId = deriveIfIdFromAS(asRegistryId, interfaceId) 
             console.log(`Interface: ${interfaceObjId}`);
 
-            marketListings = await getAllListingsOf(interfaceObjId, state.client);
+            marketListings = await getAllListingsOf(interfaceObjId, state.config.market.coinType,state.client);
             
           } else {
             try {
@@ -301,7 +299,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
 
               const listings: any[] = [];
               for (const interfaceId of interfaceIds) {
-                const ls = await getAllListingsOf(interfaceId, state.client);
+                const ls = await getAllListingsOf(interfaceId, state.config.market.coinType,state.client);
                 listings.push(...ls);
               }
               marketListings = listings
@@ -313,14 +311,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         } else {
           const result: any[] = [];
           try {
-            const asRegistries = await getAllRegistries(state.globalRegistryId, state.client);
+            const asRegistries = await getAllRegistries(state.config.sui.globalRegistryId, state.client);
             for (const asRegistry of asRegistries) {
               const interfaces = await getAllInterfacesOf(asRegistry, state.client);
               for (const interfaceId of interfaces) {
-                const listings = await getAllListingsOf(interfaceId, state.client);
+                const listings = await getAllListingsOf(interfaceId, state.config.market.coinType, state.client);
                 result.push(...listings);
               }
             }
+            console.log(result)
             console.log(ListingsToAssets(result));
           } catch (error) {
             console.log(error);
@@ -345,7 +344,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             const listingId = bytesToSuiHex(asset.assetId);
             return state.client.getObject({ objectId: listingId, include: { json: true } });
           })),
-          state.client.getBalance({ owner: state.signer.toSuiAddress(), coinType: DEFAULT_COIN_TYPE }),
+          state.client.getBalance({ owner: state.clientSigner.toSuiAddress(), coinType: state.config.market.coinType }),
         ]);
 
         type AssetMeta = { fields: Record<string, any>; interfaceObjectId: string; assetId: string; listingId: string; };
@@ -357,39 +356,30 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           return { fields, interfaceObjectId, assetId, listingId };
         });
         
-        var maxPrice = req.maxPrice;
-        const addressBalance = BigInt(balanceResult.balance.balance)
-        //TODO find a better gasPrice estimate. Also if payment is done in a currency different from SUI, subtracting the sui gas price is faulty
-        const gasPrice = 50_000n * await state.client.getReferenceGasPrice().then(gp => BigInt(gp.referenceGasPrice)).catch(err => 0n);
-        console.log(`available balance ${addressBalance}. Gas price ${gasPrice}`)
-        if (addressBalance < maxPrice - gasPrice){
-          console.warn(`maxPrice ${maxPrice} exceeds address balance. Setting maxPrice to ${addressBalance - gasPrice}`)
-          maxPrice = addressBalance - gasPrice
-        }
-        
         const tx = new Transaction();
-        const [ budget ] = tx.splitCoins(tx.gas, [tx.pure.u64(maxPrice)])
+        const budget = tx.coin({balance: req.maxPrice, type: state.config.market.coinType})
 
-
+        
         for (const [meta, asset] of metas.map((m, i) => [m, req.assets[i]!] as const)) {
-          
+          if(!(asset.startsAtExactly && asset.stopsAtExactly)){
+            throw new ConnectError(`Invalid interval for asset ${asset.assetId}`);
+          }
           addBuyAndTake(tx, {
-            packageId: state.config.package.id,
+            packageId: state.config.sui.packageId,
             interfaceObjectId: meta.interfaceObjectId,
             listingId: bytesToSuiHex(asset.assetId),
             startTime: BigInt(asset.startsAtExactly!.seconds),
             expTime:   BigInt(asset.stopsAtExactly!.seconds),
             bandwidth: asset.bandwidthExact,
-            coinType: DEFAULT_COIN_TYPE,
+            coinType:  state.config.market.coinType,
           }, budget);
         }
-
-        tx.mergeCoins(tx.gas, [budget]);
         
-        const result = await executeTransaction(state.client, state.signer, tx);
-        console.log(result);
+        tx.transferObjects([budget], tx.pure.address(state.clientSigner.toSuiAddress()));
 
-        const balanceChange = result.balanceChanges?.find(c => c.address === state.signer.toSuiAddress());
+        const result = await executeTransaction(state.client, state.clientSigner, tx);
+
+        const balanceChange = result.balanceChanges?.find(c => c.address === state.clientSigner.toSuiAddress() && c.coinType === state.config.market.coinType);
         var cost = BigInt(-Number(balanceChange?.amount ?? 0));
         // the returned cost must fit an unsigned integer, but in some cases the storage rebate is higher than the transaction cost leading to a gain (negative cost). 
         // In practice this should never happpen assuming assets prices are set properly, but when testing with small values this might happen 
@@ -424,7 +414,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       var reservation: Record<string, any> = {};
       if(req.interfaces.case == "ifPairAssetId"){
         const interfacePairId = req.interfaces.value;
-        console.log(interfacePairId);
+        
         if(!interfacePairId) throw new ConnectError("Must specify if_pair_asset_id", Code.InvalidArgument);
         const interfacePairAssetId = bytesToSuiHex(interfacePairId);
         const asset = await state.client.getObject({objectId: interfacePairAssetId, include: {json: true}});
@@ -434,16 +424,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         reservation.stopsAt     = pairAsset.expTime;
         reservation.ingressId = pairAsset.ifIngressId;
         reservation.egressId = pairAsset.ifEgressId;
-        tx  = buildRedeemPair({packageId: state.packageId, interfacePairId: interfacePairAssetId, publicKey});
+        tx  = buildRedeemPair({packageId: state.config.sui.packageId, interfacePairId: interfacePairAssetId, publicKey});
 
       }else{
         const ingressAssetId = req.interfaces.value!.ingressAssetId;
         const egressAssetId = req.interfaces.value!.egressAssetId;
         if(!(ingressAssetId && egressAssetId)) throw new ConnectError("Must specify ingress and egress Id, or interface pair id", Code.FailedPrecondition);    
-        const ingressId = bytesToSuiHex(ingressAssetId);
-        const egressId = bytesToSuiHex(egressAssetId);
-        console.log(ingressId);
-        console.log(egressId);
+          const ingressId = bytesToSuiHex(ingressAssetId);
+          const egressId = bytesToSuiHex(egressAssetId);
+          
           const ingressObj = await state.client.getObject({ objectId: ingressId, include: { json: true } });
           const ingressAsset = getHummingbirdAsset(ingressObj);
           reservation.ia          = ingressAsset.isdAsId;
@@ -454,11 +443,10 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           const egressObj = await state.client.getObject({ objectId: egressId, include: { json: true } });
           const egressAsset = getHummingbirdAsset(egressObj);
           const egressIfId  = egressAsset.ifEgressId;
-          console.log(ingressObj);
-          console.log(egressObj);
+          
           if(!(ingressIfId&&egressIfId)) throw new ConnectError("Asset Mismatch. Ingress asset must have ingress id set. Egress asset must have egress id set", Code.FailedPrecondition);
           
-          tx = buildRedeem({ packageId: state.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
+          tx = buildRedeem({ packageId: state.config.sui.packageId, ingressAssetId: ingressId, egressAssetId: egressId, publicKey });
           reservation.ingressId = ingressIfId;
           reservation.egressId = egressIfId;
       }
@@ -466,22 +454,15 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
           console.log(`waiting for redemption of ${publicKey}`);
           const deliveryPromise = state.deliveryListener.waitForDelivery(
             publicKey,
-            state.packageId,
-            state.config.redemption.timeoutSecs * 1000,
+            state.config.sui.packageId,
+            state.config.client.timeoutSecs * 1000,
           );
           // The delivery listener needs a moment to start, but the reservation could already arrive before that which would lead to us missing the reservation. 
           // To avoid this we wait a moment to allow for the delivery listener to start up. TODO: wait only until the listener is started and not longer.
           await new Promise(resolve => setTimeout(resolve, 2000))
           
-          const result = await executeTransaction(state.client, state.signer, tx);
-          /*
-          const redeemRequestObjectId = extractCreatedObjectId(
-            result,
-            getObjectType(state.packageId, 'hummingbird_asset', 'RedeemRequest'),
-          );*/
-          
+          const result = await executeTransaction(state.client, state.clientSigner, tx);
 
-          
           const delivery = await deliveryPromise;
           
           console.log(`received delivery${delivery.resId}`);
@@ -540,7 +521,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         throw new ConnectError('splitOption is required', Code.InvalidArgument);
       }
 
-      const gasBudget = BigInt(state.config.transaction.gasBudget);
+      const gasBudget = BigInt(state.config.sui.gasBudget);
       const tx = new Transaction();
       tx.setGasBudget(gasBudget);
 
@@ -549,18 +530,18 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
         console.log(req.splitOption.value.splits[idx])
         const newAsset = req.splitOption.case === 'timeSplit'
         ? tx.moveCall({
-            target: `${state.config.package.id}::hummingbird_asset::split_time`,
+            target: `${state.config.sui.packageId}::hummingbird_asset::split_time`,
             arguments: [tx.object(assetId), tx.pure.u64(BigInt(req.splitOption.value.splits[idx]?.seconds??0))],
           })
         : tx.moveCall({
-            target: `${state.config.package.id}::hummingbird_asset::split_bandwidth`,
+            target: `${state.config.sui.packageId}::hummingbird_asset::split_bandwidth`,
             arguments: [tx.object(assetId), tx.pure.u32(req.splitOption.value.splits[idx]??0)],
           });
-        tx.transferObjects([newAsset], tx.pure.address(state.signer.toSuiAddress()));
+        tx.transferObjects([newAsset], tx.pure.address(state.clientSigner.toSuiAddress()));
       }
       
       try {
-        const result = await executeTransaction(state.client, state.signer, tx);
+        const result = await executeTransaction(state.client, state.clientSigner, tx);
         console.log(result);
         const newAssetIds = result.effects.changedObjects.filter(c => c.idOperation === 'Created').map(obj => suiHexToBytes(obj.objectId ?? '0x0'));
 
@@ -577,17 +558,17 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       }
       const mergeAssetId = bytesToSuiHex(req.assetIds[0]!);
 
-      const gasBudget = BigInt(state.config.transaction.gasBudget);
+      const gasBudget = BigInt(state.config.sui.gasBudget);
       const tx = new Transaction();
       tx.setGasBudget(gasBudget);
       for(const assetId of req.assetIds.slice(1)){
         tx.moveCall({
-          target: `${state.config.package.id}::hummingbird_asset::fuse_assets`,
+          target: `${state.config.sui.packageId}::hummingbird_asset::fuse_assets`,
           arguments: [tx.object(mergeAssetId), tx.object(bytesToSuiHex(assetId))],
         });
       }
       try {
-        await executeTransaction(state.client, state.signer, tx);
+        await executeTransaction(state.client, state.clientSigner, tx);
 
         return new CombineAssetResponse({ assetId: suiHexToBytes(mergeAssetId) });
       }catch (error) {

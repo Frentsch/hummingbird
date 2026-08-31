@@ -62,10 +62,10 @@ export function createRedemptionServiceImpl(state: AppState): Partial<ServiceImp
             console.log(pending.requestObjectId);
             const encryptedReservation = await sealToPublicKey(pending.publicKey, resInfo.authenticationKey);
 
-            const tx = buildDeliverReservation({packageId: state.packageId, redeemRequestId: pending.requestObjectId, encryptedReservation, resId: BigInt(resInfo.reservationId), bwRounded: BigInt(resInfo.bandwithRounded), bwDataplaneEncoding: resInfo.bwDataplaneEncoding});
+            const tx = buildDeliverReservation({packageId: state.config.sui.packageId, redeemRequestId: pending.requestObjectId, encryptedReservation, resId: BigInt(resInfo.reservationId), bwRounded: BigInt(resInfo.bandwithRounded), bwDataplaneEncoding: resInfo.bwDataplaneEncoding});
             const result = await executeTransaction(
                     state.client as Parameters<typeof executeTransaction>[0],
-                    state.signer,
+                    state.asSigner,
                     tx,
             );
             console.log("delivered reservation")

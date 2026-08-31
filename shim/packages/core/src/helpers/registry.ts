@@ -1,20 +1,14 @@
 import { deriveObjectID } from '@mysten/sui/utils';
 import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiGraphQLClient } from '../sui-client.js';
-import { deriveIfIdFromAS } from '../helpers.js';
 
-// In the GraphQL JSON representation:
-//   - Structs are plain JSON objects (no `fields` wrapper)
-//   - UID / ID values are canonical address strings (not { id: { id: "0x..." } })
-//   - u64 values are JSON strings; u8/u16/u32 are JSON numbers
 
-export async function getAllListingsOf(interfaceId: string, client: SuiGraphQLClient): Promise<any[]> {
-    const interfaceObj = await client.getObject({ objectId: interfaceId, include: { json: true } }).catch((_)=>{});
+export async function getAllListingsOf(interfaceId: string, coinType: string, client: SuiGraphQLClient): Promise<any[]> {
+    const interfaceObj = await client.getObject({ objectId: interfaceId,  include: { json: true } }).catch((_)=>{});
     if(!interfaceObj) return [];
     const interfaceJson = interfaceObj.object.json;
     if (!interfaceJson) return [];
 
-    // listings is a Bag { id: UID, size: u64 }; UID serialises as a canonical address string.
     const listingsBag = interfaceJson['listings'] as { id: string } | undefined;
     const bagId = listingsBag?.id;
     if (!bagId) return [];
@@ -36,7 +30,7 @@ export async function getAllListingsOf(interfaceId: string, client: SuiGraphQLCl
         objectIds: listingIds,
         include: { json: true },
     });
-    return objects;
+    return objects.filter(obj => !(obj instanceof Error) && obj.type.includes(coinType));
 }
 
 export async function getAllInterfacesOf(asRegistryId: string, client: SuiGraphQLClient): Promise<string[]> {

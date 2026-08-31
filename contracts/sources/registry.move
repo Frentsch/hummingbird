@@ -44,11 +44,6 @@ module hummingbird::registry {
         exp: u64,
     }
 
-    public struct AsRegistered has copy, drop {
-        isd_as_id: u64,
-        registry_id: ID,
-    }
-
     public struct InterfaceRegistered has copy, drop {
         isd_as_id: u64,
         interface_object_id: ID,

@@ -36,7 +36,7 @@ export function createRegistrationServiceImpl(
     };
   }
 
-  const suiAddress = state.signer.getPublicKey().toSuiAddress();
+  const suiAddress = state.asSigner.getPublicKey().toSuiAddress();
   const transport = createConnectTransport({ baseUrl: state.authServerUrl, httpVersion: '1.1' });
   const authServerClient = createClient(ASRegistrationService, transport);
 
@@ -72,29 +72,28 @@ export function createRegistrationServiceImpl(
 
         const asAuthCapId = result.authCapId;
         if(asAuthCapId != ""){
-          state.asAuthCapId = asAuthCapId;
+          state.config.as.asAuthCapId = asAuthCapId;
           state.config.as.asAuthCapId = asAuthCapId;
           state.config.as.isdAsId = u64ToIsdAsId(result.isdAsId);
-          state.config.as.asRegistryId = deriveObjectID(state.config.package.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
+          state.config.as.asRegistryId = deriveObjectID(state.config.sui.globalRegistryId!, 'u64',  bcs.U64.serialize(result.isdAsId).toBytes());
           await saveConfig(state.config);
         }
         
         //create seller auth token if not exists
-        const sellerAuthTokenType = getObjectType(state.config.package.id, 'marketplace', 'SellerAuthToken');
+        const sellerAuthTokenType = getObjectType(state.config.sui.packageId, 'marketplace', 'SellerAuthToken');
         const { objects: sellerTokens } = await state.client.listOwnedObjects({
-          owner: state.signer.getPublicKey().toSuiAddress(),
+          owner: state.asSigner.getPublicKey().toSuiAddress(),
           type: sellerAuthTokenType,
         });
         if (sellerTokens.length === 0) {
           console.log("registering new seller");
-          const sellerResult = await executeTransaction(state.client, state.signer,
+          const sellerResult = await executeTransaction(state.client, state.asSigner,
             buildRegisterSeller({
-              packageId: state.config.package.id,
-              paymentAddress: state.signer.getPublicKey().toSuiAddress(),
+              packageId: state.config.sui.packageId,
+              paymentAddress: state.asSigner.getPublicKey().toSuiAddress(),
             })
           );
           const sellerAuthTokenId = extractCreatedObjectId(sellerResult, sellerAuthTokenType);
-          state.sellerAuthTokenId = sellerAuthTokenId;
           state.config.as.sellerAuthTokenId = sellerAuthTokenId;
           await saveConfig(state.config);
         }

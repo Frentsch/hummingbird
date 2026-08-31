@@ -10,7 +10,6 @@ export interface AuthKeypair {
 
 interface StoredAuthKeypair {
   scheme: 'x25519-xsalsa20poly1305';
-  /** base64-encoded raw keys. */
   publicKey: string;
   privateKey: string;
 }
@@ -38,11 +37,7 @@ async function generateAndPersist(path: string): Promise<AuthKeypair> {
   return fromStored(stored);
 }
 
-/**
- * Load the shim's X25519 keypair used to encrypt/decrypt authenticationKeys,
- * generating and persisting a new one on first startup if none exists yet.
- */
-export async function loadOrCreateAuthKeypair(path: string): Promise<AuthKeypair> {
+export async function loadOrCreateEncryptionKeypair(path: string): Promise<AuthKeypair> {
   let raw: string;
   try {
     raw = await readFile(path, 'utf-8');

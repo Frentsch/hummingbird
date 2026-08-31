@@ -18,7 +18,7 @@ export function resolveSigner(keypairs: Keypair[], address?: string): Keypair {
 
   const normalised = address.toLowerCase();
   const match = keypairs.find(
-    (kp) => kp.toSuiAddress().toLowerCase() === normalised,
+    (kp) => kp.getPublicKey().toSuiAddress().toLowerCase() === normalised,
   );
   if (!match) {
     throw new KeystoreError(

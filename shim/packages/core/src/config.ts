@@ -7,20 +7,13 @@ const NetworkSchema = z.enum(['testnet', 'mainnet', 'devnet', 'localnet']);
 export const DEFAULT_CONFIG_PATH = './shim.toml';
 
 export const ConfigSchema = z.object({
-  network: z.object({
-    name: NetworkSchema,
+  sui: z.object({
+    network: NetworkSchema,
     grpcUrl: z.string().optional(),
-  }),
-  keystore: z.object({
-    path: z.string(),
-    address: z.string().optional(),
-  }),
-  grpc: z.object({
-    port: z.number().int().min(1).max(65535).default(9090),
-  }),
-  package: z.object({
-    id: z.string(),
-    globalRegistryId: z.string().optional(),
+    gasBudget: z.number().int().min(0).default(5_000_000),
+    keystorePath: z.string(),
+    packageId: z.string(),
+    globalRegistryId: z.string()
   }),
   as: z.object({
     isdAsId: z.string().optional(),
@@ -28,22 +21,20 @@ export const ConfigSchema = z.object({
     asAuthCapId: z.string().optional(),
     sellerAuthTokenId: z.string().optional(),
     interfaces: z.array(z.string()).optional(),
+    walletAddress: z.string().optional(),
   }),
-  redemption: z.object({
-    timeoutSecs: z.number().int().min(1).default(60),
-  }).default({ timeoutSecs: 60 }),
-  db: z.object({
-    path: z.string(),
-  }).default({ path: './reservations.db' }),
-  crypto: z.object({
-    authKeyPath: z.string(),
-  }).default({ authKeyPath: './auth-keypair.json' }),
-  transaction: z.object({
-    gasBudget: z.number().int().min(0).default(5_000_000),
-  }).default({ gasBudget: 5_000_000 }),
-  authServer: z.object({
-    url: z.string(),
-  }).optional(),
+  client: z.object({
+    timeoutSecs: z.number().int().min(1).default(60).default(60),
+    encryptionKeyPath: z.string(),
+    walletAddress: z.string().optional(),
+  }),
+  market: z.object({
+    authServerUrl: z.string(),
+    grpcPort: z.number().int().min(1).max(65535).default(9091),
+    dbPath: z.string(),
+    coinType: z.string().default("0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"),
+    coinExponent: z.int().default(9),
+  }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
