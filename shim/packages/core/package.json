@@ -14,10 +14,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/bcs": "^2.0.5",
-    "@mysten/sui": "^2.17.0",
-    "@protobuf-ts/grpc-transport": "^2.11.1",
     "@grpc/grpc-js": "^1.14.4",
+    "@mysten/bcs": "^2.0.5",
+    "@mysten/sui": "^2.31.2",
+    "@protobuf-ts/grpc-transport": "^2.11.1",
     "better-sqlite3": "^11.0.0",
     "libsodium-wrappers": "^0.8.4",
     "smol-toml": "^1.6.1",

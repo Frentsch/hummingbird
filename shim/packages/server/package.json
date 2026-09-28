@@ -16,7 +16,7 @@
     "@connectrpc/connect-node": "^1.7.0",
     "@grpc/grpc-js": "^1.14.4",
     "@mysten/bcs": "^2.0.5",
-    "@mysten/sui": "^2.17.0",
+    "@mysten/sui": "^2.31.2",
     "@protobuf-ts/grpc-transport": "^2.11.1",
     "@sui-shim/core": "workspace:*",
     "zod": "^4.4.0"

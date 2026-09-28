@@ -11,59 +11,16 @@ import { KeystoreError } from '../errors.js';
 
 const DEFAULT_KEYSTORE_PATH = join(homedir(), '.sui', 'sui_config', 'sui.keystore');
 
-type Scheme = 'ED25519' | 'Secp256k1' | 'Secp256r1';
-
-function schemeFromFlag(flag: number): Scheme {
-  switch (flag) {
-    case 0x00:
-      return 'ED25519';
-    case 0x01:
-      return 'Secp256k1';
-    case 0x02:
-      return 'Secp256r1';
-    default:
-      throw new KeystoreError(`Unknown key scheme flag: 0x${flag.toString(16)}`);
-  }
+function getKeypair(raw: Uint8Array): Keypair {
+    switch (raw[0]) {
+        case 0:     return Ed25519Keypair.fromSecretKey(raw.slice(1));
+        case 1:     return Secp256k1Keypair.fromSecretKey(raw.slice(1));
+        case 2:     return Secp256r1Keypair.fromSecretKey(raw.slice(1));
+        default:
+        throw new Error(`Key scheme ${raw[0]} not supported`);
+    }
 }
 
-function keypairFor(scheme: Scheme, secretKey: Uint8Array): Keypair {
-  switch (scheme) {
-    case 'ED25519':
-      return Ed25519Keypair.fromSecretKey(secretKey);
-    case 'Secp256k1':
-      return Secp256k1Keypair.fromSecretKey(secretKey);
-    case 'Secp256r1':
-      return Secp256r1Keypair.fromSecretKey(secretKey);
-  }
-}
-
-/**
- * Parse a single decoded keystore entry into a Keypair.
- *
- * Handles both entry formats seen across Sui versions:
- *   - 33 bytes: flag(1) || privkey(32)              (current)
- *   - 65 bytes: flag(1) || pubkey(32) || privkey(32) (legacy)
- */
-function parseEntry(bytes: Uint8Array): Keypair {
-  const scheme = schemeFromFlag(bytes[0]!);
-
-  let privkeyBytes: Uint8Array;
-  if (bytes.length === 33) {
-    privkeyBytes = bytes.slice(1);
-  } else if (bytes.length === 65) {
-    privkeyBytes = bytes.slice(33);
-  } else {
-    throw new KeystoreError(`Unexpected keystore entry length: ${bytes.length}`);
-  }
-
-  // Round-trip through the bech32 form so we use the SDK's canonical decoder.
-  const { secretKey } = decodeSuiPrivateKey(encodeSuiPrivateKey(privkeyBytes, scheme));
-  return keypairFor(scheme, secretKey);
-}
-
-/**
- * Load all keypairs from a Sui keystore file.
- */
 export async function loadKeypairs(
   options: { path?: string } = {},
 ): Promise<Keypair[]> {
@@ -85,11 +42,6 @@ export async function loadKeypairs(
     throw new KeystoreError(`Malformed keystore at ${path}`, { cause });
   }
 
-  return Promise.all(
-    entries.map(async (b64) => {
-      const raw = fromBase64(b64);
-      return parseEntry(raw);
-    }),
-  );
+  return entries.map((b64) => getKeypair(fromBase64(b64)));
 }
 

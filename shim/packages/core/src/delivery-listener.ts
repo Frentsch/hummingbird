@@ -1,5 +1,7 @@
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiGrpcClient } from './sui-client.js';
+import { time } from 'node:console';
+import { date } from 'zod';
 
 export interface DeliveryResult {
   encryptedReservation: Uint8Array;
@@ -43,17 +45,18 @@ export class DeliveryListener {
     //const normalizedId = redeemRequestObjectId.toLowerCase();
     const abortController = new AbortController();
 
-    return new Promise<DeliveryResult>((resolve, reject) => {
+    return new Promise<DeliveryResult>(async (resolve, reject) => {
       const timer = setTimeout(() => {
         abortController.abort();
         reject(new DeliveryTimeoutError());
       }, timeoutMs);
-
+      console.log(`Startup delivery listener: ${new Date().getUTCMilliseconds}`)
       const stream = this.#grpc.subscriptionService.subscribeCheckpoints(
         { readMask: { paths: ['transactions.events', 'transactions.effects'] } },
         { abort: abortController.signal },
       );
-      console.log("delivery listener started");
+      await stream.headers.catch(err => reject(err));
+      console.log(`delivery listener started at ${new Date().getUTCMilliseconds}`);
       (async () => {
         try {
           for await (const response of stream.responses) {
@@ -77,6 +80,7 @@ export class DeliveryListener {
                 //TODO add some additional identifier to avoid two concurrent redemptions to get mismatched
                 //The issue is that the listener should be started before the transaction is executed, 
                 // but we need to execute the transaction in order to get the reservation object id
+                // probably add an additional field to the event
                 if (!(publicKey.length == decoded.public_key.length && publicKey.every((value,index) => value === decoded.public_key[index]))){
                   console.log(`mismatched publickey ${decoded.public_key} and ${publicKey}`)
                   continue;

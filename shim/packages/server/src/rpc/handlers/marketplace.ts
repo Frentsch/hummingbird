@@ -260,7 +260,7 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
       var assets: SearchAsset[];
       if (_req.owned) {
         const result = await state.client.listOwnedObjects({
-          owner: state.asSigner.getPublicKey().toSuiAddress(),
+          owner: state.clientSigner.getPublicKey().toSuiAddress(),
           type: getObjectType(state.config.sui.packageId, "hummingbird_asset", "HummingbirdAsset"),
           include: { json: true },
         });
@@ -457,9 +457,6 @@ export function createMarketplaceServiceImpl(state: AppState): Partial<ServiceIm
             state.config.sui.packageId,
             state.config.client.timeoutSecs * 1000,
           );
-          // The delivery listener needs a moment to start, but the reservation could already arrive before that which would lead to us missing the reservation. 
-          // To avoid this we wait a moment to allow for the delivery listener to start up. TODO: wait only until the listener is started and not longer.
-          await new Promise(resolve => setTimeout(resolve, 2000))
           
           const result = await executeTransaction(state.client, state.clientSigner, tx);
 

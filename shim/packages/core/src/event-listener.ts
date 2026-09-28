@@ -144,7 +144,6 @@ export class EventListener {
           const txDigest = tx.digest ?? '';
           const eventSeq = String(i);
           try {
-            //TODO check if this await is needed, because it blocks further requests which slows down everything
             this.#processRequest(txDigest, eventSeq, decoded.redeem_request_id);
           } catch (err) {
             console.error(`[EventListener] Failed to process event in tx ${txDigest}:`, err);

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mysten/sui": "^2.17.0",
+    "@mysten/sui": "^2.31.2",
     "@sui-shim/core": "workspace:*",
     "@sui-shim/server": "workspace:*",
     "commander": "^14.0.0"

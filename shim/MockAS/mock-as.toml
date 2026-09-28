@@ -1,34 +1,37 @@
-#right now only grpc port is needed, but rest is here so that we can resuse the config scheme from core
-[grpc]
-port = 9091
+#right now only marekt.grpcPort is needed, but rest is here so that we can resuse the config scheme from core
 
-
-[network]
-name = "testnet"
+[sui]
+network = "testnet"
 grpcUrl = "fullnode.testnet.sui.io:443"
-
-[keystore]
-path = "/home/frentsch/.sui/sui_config/sui.keystore"
-
-[package]
-id = "0x34ee29bd2e99bb2972d4d007c39b669f601e6392bf10123d909ac27105d937af"
-globalRegistryId = "0xdb1cd6f68527a418586839593c1724eb98d1833981d1c8d16dbfa7df9d73c9a8"
+gasBudget = 5_000_000
+keystorePath = "/home/frentsch/.sui/sui_config/sui.keystore"
+packageId = "0x1db44e4db30b7ead61f6a317017d3abb12a437d298df777b64ae2b3d5cbb1e82"
+globalRegistryId = "0xa51f39bedd3a6674aeeb9cbebb69cb2d500d197135d0acfd0833ac74498f6069"
 
 [as]
 isdAsId = "1-ff00:0:111"
-asRegistryId = "0x8304002a4e76d505ec2e34ad745a8f834cf7e99a7bedc30f7a378350fe14e63f"
-asAuthCapId = "0x8b17716db893d9e40f1bcc176ce206c7dd6a2e76db2f7de266625db95735adca"
-sellerAuthTokenId = "0x47eba139c4fafe6433d9803da067ddb2bbb904bf221ec3586742e391fbdb76e7"
+asRegistryId = "0x64d62bd3b3674a44da037dadcef076f9d024d12338d35f535365e4018d57d1e8"
+asAuthCapId = "0x3210e23074671cbed80bd056cfb1b03ecd2d6cf878d06d2c5eb802cefc61225e"
+sellerAuthTokenId = "0x29db9ce44c42d8df219152d886508caced0ee33edd923dffc554588f264a7fac"
 interfaces = [ "0x66cfd8708c083f60407b74f824239e28ebafbdaf14ad01faf95c27ee2b85fd17", "0x765c68d5c4ed4b3d882c231c17185677fa503fcc804dccf4db12ad09090fea96" ]
+walletAddress = "0x1737d7dc6b63ef10b7edd316524ab1ece70540a8e012dbc9593a157455ceebef"
 
-[redemption]
+[client]
 timeoutSecs = 60
+encryptionKeyPath = "./auth-keypair.json"
+walletAddress = "0xf71483ddbe609e52ef0ec5a0030f16b73f4a2831c9e84b4e559f4b240d5a0d76"
 
-[db]
-path = "./reservations.db"
+[market]
+authServerUrl = "http://localhost:9092"
+grpcPort = 9091
+dbPath = "./reservations.db"
+# SUI "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+# coinType = "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+# coinExponent = 9 #The shim always uses base units (e.g. 10^-9 SUI or 10^-6 USDC). Always set this to the base unit exponent of the corresponding coinType
+# USDC has different addresses for testnet and main network 
+# testnet: 
+coinType = "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC" 
+# mainnet: 
+# coinType = "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"
+coinExponent = 6
 
-[transaction]
-gasBudget = 50000000
-
-[authServer]
-url = "http://localhost:9092"

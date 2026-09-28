@@ -172,7 +172,7 @@ export function makeCallCommand(): Command {
         const result = await runTx(
           ctx,
           buildCreateListing({
-            packageId: ctx.config.package.id,
+            packageId: ctx.config.sui.packageId,
             interfaceObjectId: interfaceObjectId!,
             ingressId: opts.ingressId,
             egressId: opts.egressId,
