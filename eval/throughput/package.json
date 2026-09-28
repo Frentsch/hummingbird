@@ -1,0 +1,22 @@
+{
+  "name": "hummingbird-throughput-eval",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Load generator measuring shared-Interface throughput of create_listing / buy",
+  "scripts": {
+    "setup": "tsx src/setup.ts",
+    "run": "tsx src/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@mysten/sui": "2.31.2",
+    "@protobuf-ts/grpc-transport": "^2.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3"
+  }
+}
